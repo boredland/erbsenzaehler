@@ -17,6 +17,9 @@
       "bucket_name": "erbsenzaehler-photos"
     }
   ],
+  "images": {
+    "binding": "IMAGES"
+  },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

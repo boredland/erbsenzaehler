@@ -877,6 +877,31 @@
   const POST = (p, b) => api('POST', p, b);
   const DEL  = (p)    => api('DELETE', p);
 
+  // ── Client-side image downscaling ─────────────────────────────
+  // Phone photos are ~3 MB; shrink before upload to save R2 storage/egress.
+  async function downscaleImage(file, maxDim = 1600, quality = 0.85) {
+    if (!file.type?.startsWith('image/')) return file;
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      let { width, height } = bitmap;
+      if (Math.max(width, height) > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+      bitmap.close?.();
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], 'harvest.jpg', { type: 'image/jpeg' });
+    } catch {
+      return file;
+    }
+  }
+
   // ── Toast ─────────────────────────────────────────────────────
   let toastTimer;
   function toast(msg) {
@@ -1192,8 +1217,9 @@
 
       if (state.harvestPhotoFile) {
         try {
+          const photo = await downscaleImage(state.harvestPhotoFile);
           const form = new FormData();
-          form.append('photo', state.harvestPhotoFile);
+          form.append('photo', photo);
           await fetch(`/api/gardens/${state.gardenId}/harvests/${data.id}/photo`, {
             method: 'POST', body: form,
           });
@@ -1300,10 +1326,11 @@
       gc.innerHTML = `<div class="gallery-grid">${withPhotos.map(h => `
         <div>
           <img class="gallery-thumb"
-               src="/api/photos/${state.gardenId}/${h.id}"
+               src="/api/photos/${state.gardenId}/${h.id}?w=500"
                alt="Ernte"
+               loading="lazy"
                data-action="fullscreen-photo"
-               data-src="/api/photos/${state.gardenId}/${h.id}">
+               data-src="/api/photos/${state.gardenId}/${h.id}?w=1600">
           <div class="gallery-harvest-info">
             ${h.count} Stück · ${h.user_name} · ${new Date(h.harvested_at * 1000).toLocaleDateString('de')}
             ${h.note ? `<br><em>${esc(h.note)}</em>` : ''}

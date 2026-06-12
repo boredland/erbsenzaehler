@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 type Bindings = {
   DB: D1Database
   PHOTOS: R2Bucket
+  IMAGES: ImagesBinding
   ASSETS: Fetcher
 }
 
@@ -39,7 +40,9 @@ app.get('/api/gardens/:id', async (c) => {
   if (!garden) return c.json({ error: 'Garden not found' }, 404)
 
   const { results: vegetables } = await c.env.DB.prepare(`
-    SELECT v.*, COALESCE(SUM(h.count), 0) AS total_count
+    SELECT v.*,
+      COALESCE(SUM(h.count), 0) AS total_count,
+      CASE WHEN COUNT(h.photo_key) > 0 THEN 1 ELSE 0 END AS has_photos
     FROM vegetables v
     LEFT JOIN harvests h ON h.vegetable_id = v.id
     WHERE v.garden_id = ?
@@ -158,16 +161,46 @@ app.get('/api/gardens/:id/waterings', async (c) => {
 
 // ── Photos ────────────────────────────────────────────────────────────────────
 
+const IMMUTABLE = 'public, max-age=31536000, immutable'
+
 app.get('/api/photos/:gardenId/:harvestId', async (c) => {
   const { gardenId, harvestId } = c.req.param()
   const key = `gardens/${gardenId}/${harvestId}`
   const obj = await c.env.PHOTOS.get(key)
   if (!obj) return c.json({ error: 'Not found' }, 404)
 
+  const requestedWidth = Number.parseInt(c.req.query('w') ?? '', 10)
+  const width = Number.isFinite(requestedWidth)
+    ? Math.min(Math.max(requestedWidth, 32), 2048)
+    : null
+
+  if (width) {
+    try {
+      const transformed = await c.env.IMAGES.input(obj.body)
+        .transform({ width })
+        .output({ format: 'image/webp', quality: 80 })
+      return new Response(transformed.response().body, {
+        headers: { 'Content-Type': 'image/webp', 'Cache-Control': IMMUTABLE },
+      })
+    } catch {
+      // Transform unavailable — fall back to the original below
+      const fresh = await c.env.PHOTOS.get(key)
+      if (fresh) {
+        return new Response(fresh.body, {
+          headers: {
+            'Content-Type': fresh.httpMetadata?.contentType || 'image/jpeg',
+            'Cache-Control': IMMUTABLE,
+          },
+        })
+      }
+      return c.json({ error: 'Not found' }, 404)
+    }
+  }
+
   return new Response(obj.body, {
     headers: {
       'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': IMMUTABLE,
     },
   })
 })
