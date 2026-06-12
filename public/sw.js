@@ -1,4 +1,4 @@
-const CACHE = 'erbsenzaehler-v2';
+const CACHE = 'erbsenzaehler-v3';
 const PRECACHE = ['/', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -56,4 +56,68 @@ self.addEventListener('notificationclick', e => {
       if (self.clients.openWindow) return self.clients.openWindow(target);
     })
   );
+});
+
+// ── Re-subscribe when the browser rotates the push subscription ───
+// The page records which gardens this device subscribed to in IndexedDB
+// (store 'push-gardens'); we replay them against the fresh subscription.
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('erbsenzaehler', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('push-gardens', { keyPath: 'gardenId' });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+
+function idbAllGardens() {
+  return idbOpen().then(db => new Promise(res => {
+    const req = db.transaction('push-gardens', 'readonly').objectStore('push-gardens').getAll();
+    req.onsuccess = () => res(req.result || []);
+    req.onerror = () => res([]);
+  })).catch(() => []);
+}
+
+function urlB64ToUint8Array(s) {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil((async () => {
+    try {
+      const gardens = await idbAllGardens();
+      if (!gardens.length) return;
+
+      const keyRes = await fetch('/api/push/key');
+      if (!keyRes.ok) return;
+      const { publicKey } = await keyRes.json();
+
+      const newSub = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(publicKey),
+      });
+      const json = newSub.toJSON();
+      const oldEndpoint = e.oldSubscription && e.oldSubscription.endpoint;
+
+      for (const g of gardens) {
+        await fetch(`/api/gardens/${g.gardenId}/push/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys, user_name: g.userName || undefined }),
+        }).catch(() => {});
+        if (oldEndpoint) {
+          await fetch(`/api/gardens/${g.gardenId}/push/unsubscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: oldEndpoint }),
+          }).catch(() => {});
+        }
+      }
+    } catch (_) { /* best effort */ }
+  })());
 });

@@ -1010,6 +1010,40 @@
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
 
+  // Persist which gardens this device subscribed to, so the service worker can
+  // replay them if the browser rotates the push subscription.
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('erbsenzaehler', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('push-gardens', { keyPath: 'gardenId' });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  function pushGardensAdd(gardenId, userName) {
+    return idbOpen().then(db => new Promise((res, rej) => {
+      const tx = db.transaction('push-gardens', 'readwrite');
+      tx.objectStore('push-gardens').put({ gardenId, userName: userName || null });
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    })).catch(() => {});
+  }
+  function pushGardensRemove(gardenId) {
+    return idbOpen().then(db => new Promise(res => {
+      const tx = db.transaction('push-gardens', 'readwrite');
+      tx.objectStore('push-gardens').delete(gardenId);
+      tx.oncomplete = () => res();
+      tx.onerror = () => res();
+    })).catch(() => {});
+  }
+  function pushGardensAll() {
+    return idbOpen().then(db => new Promise(res => {
+      const req = db.transaction('push-gardens', 'readonly').objectStore('push-gardens').getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => res([]);
+    })).catch(() => []);
+  }
+
   async function currentPushSubscription() {
     if (!pushSupported()) return null;
     const reg = await navigator.serviceWorker.ready;
@@ -1021,7 +1055,9 @@
     if (!btn) return;
     if (!pushSupported()) { btn.style.display = 'none'; return; }
     const sub = await currentPushSubscription();
-    const on = !!sub && Notification.permission === 'granted';
+    const gardens = await pushGardensAll();
+    const subscribedHere = gardens.some(g => g.gardenId === state.gardenId);
+    const on = !!sub && Notification.permission === 'granted' && subscribedHere;
     btn.textContent = on ? '🔔' : '🔕';
     btn.classList.toggle('notify-on', on);
     btn.dataset.on = on ? '1' : '0';
@@ -1044,6 +1080,7 @@
       keys: json.keys,
       user_name: state.username || undefined,
     });
+    await pushGardensAdd(state.gardenId, state.username);
     toast('🔔 Benachrichtigungen an!');
     refreshNotifyButton();
   }
@@ -1053,6 +1090,11 @@
     if (sub) {
       await POST(`/api/gardens/${state.gardenId}/push/unsubscribe`, { endpoint: sub.endpoint })
         .catch(() => {});
+    }
+    await pushGardensRemove(state.gardenId);
+    // Tear down the browser subscription only when no garden uses it anymore.
+    const remaining = await pushGardensAll();
+    if (sub && remaining.length === 0) {
       await sub.unsubscribe().catch(() => {});
     }
     toast('🔕 Benachrichtigungen aus');
