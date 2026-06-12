@@ -85,11 +85,22 @@ async function notifyGarden(
 const RAIN_THRESHOLD_MM = 4
 const RAIN_LOOKBACK_DAYS = 7
 
+interface DayForecast {
+  date: string
+  tmax: number | null
+  tmin: number | null
+  mm: number
+  pop: number | null
+  code: number | null
+}
+
 interface RainInfo {
   lastRainAt: number | null
   lastRainMm: number
   totalMm: number
   todayMm: number
+  today: DayForecast | null
+  tomorrow: DayForecast | null
 }
 
 interface PhotonProps {
@@ -112,7 +123,14 @@ function photonLabel(p: PhotonProps): string {
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lon: number; label: string } | null> {
   const url = `https://photon.komoot.io/api/?limit=1&lang=de&q=${encodeURIComponent(address)}`
-  const res = await fetch(url, { cf: { cacheTtl: 86400, cacheEverything: true } })
+  // Geocoding is effectively immutable — cache successes for 30 days, never
+  // cache failures so a transient error or typo fix can be retried.
+  const res = await fetch(url, {
+    cf: {
+      cacheEverything: true,
+      cacheTtlByStatus: { '200-299': 2592000, '400-499': 0, '500-599': -1 },
+    },
+  })
   if (!res.ok) return null
 
   const data = await res.json<{
@@ -127,20 +145,58 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lon: numb
 }
 
 async function fetchRecentRain(lat: number, lon: number): Promise<RainInfo | null> {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&daily=precipitation_sum&past_days=${RAIN_LOOKBACK_DAYS}&forecast_days=1&timezone=auto`
-  const res = await fetch(url, { cf: { cacheTtl: 3600, cacheEverything: true } })
+  // Round to ~1 km so nearby gardens and repeat loads share one cache entry.
+  const la = lat.toFixed(2)
+  const lo = lon.toFixed(2)
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}` +
+    `&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code` +
+    `&past_days=${RAIN_LOOKBACK_DAYS}&forecast_days=2&timezone=auto`
+  // Forecast refreshes through the day; 3h keeps it fresh while cutting calls.
+  const res = await fetch(url, {
+    cf: {
+      cacheEverything: true,
+      cacheTtlByStatus: { '200-299': 10800, '400-499': 0, '500-599': -1 },
+    },
+  })
   if (!res.ok) return null
 
-  const data = await res.json<{ daily?: { time?: string[]; precipitation_sum?: number[] } }>()
-  const days = data.daily?.time ?? []
-  const sums = data.daily?.precipitation_sum ?? []
+  const data = await res.json<{
+    daily?: {
+      time?: string[]
+      precipitation_sum?: number[]
+      temperature_2m_max?: number[]
+      temperature_2m_min?: number[]
+      precipitation_probability_max?: number[]
+      weather_code?: number[]
+    }
+  }>()
+  const d = data.daily
+  const days = d?.time ?? []
+  const sums = d?.precipitation_sum ?? []
+  if (!days.length) return null
+
+  // With forecast_days=2 the array ends with [..past.., today, tomorrow].
+  const todayIdx = days.length - 2
+  const tomorrowIdx = days.length - 1
+
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const buildDay = (i: number): DayForecast | null => {
+    if (i < 0 || i >= days.length) return null
+    return {
+      date: days[i],
+      tmax: d?.temperature_2m_max?.[i] ?? null,
+      tmin: d?.temperature_2m_min?.[i] ?? null,
+      mm: round1(sums[i] ?? 0),
+      pop: d?.precipitation_probability_max?.[i] ?? null,
+      code: d?.weather_code?.[i] ?? null,
+    }
+  }
 
   const nowSec = Math.floor(Date.now() / 1000)
   let lastRainAt: number | null = null
   let lastRainMm = 0
   let totalMm = 0
-  for (let i = 0; i < days.length; i++) {
+  for (let i = 0; i <= todayIdx; i++) {
     const mm = sums[i] ?? 0
     totalMm += mm
     if (mm >= RAIN_THRESHOLD_MM) {
@@ -153,12 +209,14 @@ async function fetchRecentRain(lat: number, lon: number): Promise<RainInfo | nul
       }
     }
   }
-  const todayMm = days.length ? (sums[days.length - 1] ?? 0) : 0
+
   return {
     lastRainAt,
     lastRainMm,
-    totalMm: Math.round(totalMm * 10) / 10,
-    todayMm: Math.round(todayMm * 10) / 10,
+    totalMm: round1(totalMm),
+    todayMm: round1(sums[todayIdx] ?? 0),
+    today: buildDay(todayIdx),
+    tomorrow: buildDay(tomorrowIdx),
   }
 }
 

@@ -827,6 +827,46 @@
     .watering-urgency-bar.warn   { background: var(--yellow); }
     .watering-urgency-bar.urgent { background: #C83030; }
 
+    /* ── Weather strip ────────────────────────────────────────── */
+    .weather-strip {
+      margin: 12px 16px 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .weather-day {
+      background: var(--green-5);
+      border: 2px solid var(--green-4);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .weather-day-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--green-2);
+      font-weight: 500;
+    }
+    .weather-day-emoji {
+      font-size: 26px;
+      line-height: 1.2;
+      filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.08));
+    }
+    .weather-day-temp {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .weather-day-rain {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
     /* ── Fullscreen photo ─────────────────────────────────────── */
     .photo-fullscreen {
       position: fixed;
@@ -1100,6 +1140,44 @@
     };
   }
 
+  function weatherEmoji(code) {
+    if (code == null) return '🌡️';
+    if (code === 0) return '☀️';
+    if (code <= 3) return '⛅';
+    if (code <= 48) return '🌫️';
+    if (code <= 67) return '🌧️';
+    if (code <= 77) return '❄️';
+    if (code <= 82) return '🌦️';
+    if (code <= 86) return '🌨️';
+    return '⛈️';
+  }
+
+  function renderWeatherStrip() {
+    const w = state.weather;
+    if (!w || !w.today) return '';
+    const day = (d, label) => {
+      if (!d) return '';
+      const temp = (d.tmax != null && d.tmin != null)
+        ? `${Math.round(d.tmax)}° / ${Math.round(d.tmin)}°`
+        : '–';
+      const rain = d.mm > 0
+        ? `${d.mm} mm${d.pop != null ? ` · ${d.pop}%` : ''}`
+        : (d.pop != null ? `${d.pop}% Regen` : 'trocken');
+      return `
+        <div class="weather-day">
+          <div class="weather-day-label">${label}</div>
+          <div class="weather-day-emoji">${weatherEmoji(d.code)}</div>
+          <div class="weather-day-temp">${temp}</div>
+          <div class="weather-day-rain">💧 ${rain}</div>
+        </div>`;
+    };
+    return `
+      <div class="weather-strip">
+        ${day(w.today, 'Heute')}
+        ${day(w.tomorrow, 'Morgen')}
+      </div>`;
+  }
+
   function renderTaskCard(cfg, last) {
     const s = taskStatus(cfg, last);
     const byLine = s.byRain
@@ -1192,6 +1270,7 @@
         </header>
         <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Gemüse verwalten</div>
         ${TASKS.map(cfg => renderTaskCard(cfg, effectiveLast(cfg))).join('')}
+        ${renderWeatherStrip()}
         <main class="garden-content" id="garden-content">
           ${gridContent}
         </main>
