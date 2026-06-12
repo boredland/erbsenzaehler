@@ -23,12 +23,13 @@ CREATE TABLE IF NOT EXISTS harvests (
   harvested_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
-CREATE TABLE IF NOT EXISTS waterings (
+CREATE TABLE IF NOT EXISTS task_logs (
   id TEXT PRIMARY KEY,
   garden_id TEXT NOT NULL REFERENCES gardens(id) ON DELETE CASCADE,
+  task TEXT NOT NULL,
   user_name TEXT NOT NULL,
   note TEXT,
-  watered_at INTEGER NOT NULL DEFAULT (unixepoch())
+  done_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -45,5 +46,5 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_vegetables_garden ON vegetables(garden_id);
 CREATE INDEX IF NOT EXISTS idx_harvests_vegetable ON harvests(vegetable_id);
 CREATE INDEX IF NOT EXISTS idx_harvests_garden ON harvests(garden_id);
-CREATE INDEX IF NOT EXISTS idx_waterings_garden ON waterings(garden_id, watered_at);
+CREATE INDEX IF NOT EXISTS idx_task_logs_garden ON task_logs(garden_id, task, done_at);
 CREATE INDEX IF NOT EXISTS idx_push_garden ON push_subscriptions(garden_id);

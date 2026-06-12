@@ -108,11 +108,19 @@ app.get('/api/gardens/:id', async (c) => {
     ORDER BY v.created_at ASC
   `).bind(id).all()
 
-  const lastWatering = await c.env.DB.prepare(
-    'SELECT * FROM waterings WHERE garden_id = ? ORDER BY watered_at DESC LIMIT 1'
-  ).bind(id).first()
+  const { results: latestTasks } = await c.env.DB.prepare(`
+    SELECT t.task, t.user_name, t.note, t.done_at
+    FROM task_logs t
+    JOIN (
+      SELECT task, MAX(done_at) AS m FROM task_logs WHERE garden_id = ? GROUP BY task
+    ) latest ON latest.task = t.task AND latest.m = t.done_at
+    WHERE t.garden_id = ?
+  `).bind(id, id).all<{ task: string; user_name: string; note: string | null; done_at: number }>()
 
-  return c.json({ garden, vegetables, lastWatering: lastWatering ?? null })
+  const lastTasks: Record<string, unknown> = {}
+  for (const row of latestTasks) lastTasks[row.task] = row
+
+  return c.json({ garden, vegetables, lastTasks })
 })
 
 // ── Vegetables ────────────────────────────────────────────────────────────────
@@ -205,22 +213,30 @@ app.get('/api/gardens/:id/vegetables/:vegId/harvests', async (c) => {
   return c.json({ harvests: results })
 })
 
-// ── Waterings ─────────────────────────────────────────────────────────────────
+// ── Recurring tasks (watering, mowing, …) ─────────────────────────────────────
 
-app.post('/api/gardens/:id/waterings', async (c) => {
-  const { id } = c.req.param()
+const TASKS: Record<string, { emoji: string; done: string }> = {
+  watering: { emoji: '💧', done: 'hat den Garten gegossen.' },
+  mowing: { emoji: '🌾', done: 'hat den Rasen gemäht.' },
+}
+
+app.post('/api/gardens/:id/tasks/:task', async (c) => {
+  const { id, task } = c.req.param()
+  const cfg = TASKS[task]
+  if (!cfg) return c.json({ error: 'Unknown task' }, 400)
+
   const { user_name, note } = await c.req.json<{ user_name: string; note?: string }>()
   if (!user_name?.trim()) return c.json({ error: 'user_name required' }, 400)
 
-  const wateringId = genId()
+  const logId = genId()
   const actor = user_name.trim()
   await c.env.DB.prepare(
-    'INSERT INTO waterings (id, garden_id, user_name, note) VALUES (?, ?, ?, ?)'
-  ).bind(wateringId, id, actor, note || null).run()
+    'INSERT INTO task_logs (id, garden_id, task, user_name, note) VALUES (?, ?, ?, ?, ?)'
+  ).bind(logId, id, task, actor, note || null).run()
 
-  const watering = await c.env.DB.prepare(
-    'SELECT * FROM waterings WHERE id = ?'
-  ).bind(wateringId).first()
+  const log = await c.env.DB.prepare(
+    'SELECT task, user_name, note, done_at FROM task_logs WHERE id = ?'
+  ).bind(logId).first()
 
   const garden = await c.env.DB.prepare(
     'SELECT name FROM gardens WHERE id = ?'
@@ -228,22 +244,14 @@ app.post('/api/gardens/:id/waterings', async (c) => {
 
   if (garden) {
     c.executionCtx.waitUntil(notifyGarden(c.env, id, actor, {
-      title: `💧 ${garden.name}`,
-      body: `${actor} hat den Garten gegossen.`,
+      title: `${cfg.emoji} ${garden.name}`,
+      body: `${actor} ${cfg.done}`,
       url: `/?g=${id}`,
-      tag: `watering-${id}`,
+      tag: `${task}-${id}`,
     }))
   }
 
-  return c.json(watering)
-})
-
-app.get('/api/gardens/:id/waterings', async (c) => {
-  const { id } = c.req.param()
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM waterings WHERE garden_id = ? ORDER BY watered_at DESC LIMIT 20'
-  ).bind(id).all()
-  return c.json({ waterings: results })
+  return c.json(log)
 })
 
 // ── Push notifications ────────────────────────────────────────────────────────

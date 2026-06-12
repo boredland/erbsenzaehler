@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <filter id="paper">
+      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.05"/></feComponentTransfer>
+      <feComposite operator="over" in2="SourceGraphic"/>
+    </filter>
+  </defs>
+
+  <!-- Cream background -->
+  <rect width="1200" height="630" fill="#F3EBD3"/>
+  <rect width="1200" height="630" fill="#000" opacity="0.015" filter="url(#paper)"/>
+
+  <!-- Stamp frame -->
+  <rect x="48" y="48" width="1104" height="534" rx="16" fill="#FAF5E8" stroke="#1E3A2F" stroke-width="5"/>
+  <rect x="68" y="68" width="1064" height="494" rx="8" fill="none" stroke="#A8D5BA" stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round"/>
+
+  <!-- Pea pod emblem (left) -->
+  <g transform="translate(250 315)">
+    <circle r="150" fill="#1E3A2F"/>
+    <path d="M-115 70 Q-95 -75 95 -55 Q95 80 -115 70Z" fill="#2D6A4F"/>
+    <path d="M-115 70 Q-95 -75 95 -55" stroke="#52B07A" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <circle cx="-78" cy="20" r="33" fill="#F3EBD3"/>
+    <circle cx="-8" cy="5" r="33" fill="#F3EBD3"/>
+    <circle cx="62" cy="20" r="33" fill="#F3EBD3"/>
+    <path d="M95 -55 Q150 -95 120 -135" stroke="#52B07A" stroke-width="7" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Wordmark (right) -->
+  <text x="470" y="260" font-family="Fraunces" font-weight="900" font-size="104" fill="#1E3A2F" letter-spacing="-2">Erbsenzähler</text>
+  <text x="474" y="320" font-family="Fraunces" font-weight="400" font-style="italic" font-size="40" fill="#C85200">Zählt die Ernte. Teilt die Freude.</text>
+
+  <!-- Feature chips -->
+  <g font-family="Fraunces" font-size="27" font-weight="600" fill="#FAF5E8">
+    <rect x="470" y="372" width="178" height="52" rx="10" fill="#1E3A2F"/>
+    <text x="500" y="407">🥕 Zählen</text>
+    <rect x="664" y="372" width="178" height="52" rx="10" fill="#2D6A4F"/>
+    <text x="694" y="407">💧 Gießen</text>
+    <rect x="858" y="372" width="164" height="52" rx="10" fill="#C85200"/>
+    <text x="888" y="407">📷 Fotos</text>
+  </g>
+
+  <!-- Footer line -->
+  <text x="470" y="492" font-family="Fraunces" font-size="24" fill="#6B5E4A">Erntetagebuch für Gemeinschaftsgärten · kein Konto nötig</text>
+</svg>

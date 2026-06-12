@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#1E3A2F">
   <title>Erbsenzähler</title>
+  <meta name="description" content="Erbsenzähler ist ein verspieltes Erntetagebuch für Gemeinschaftsgärten: Ernte zählen, Gießen & Rasenmähen festhalten und Beweisfotos teilen – ganz ohne Konto, einfach per Link.">
+  <meta property="og:title" content="Erbsenzähler – Erntetagebuch für Gemeinschaftsgärten">
+  <meta property="og:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen festhalten und Beweisfotos sammeln – ohne Konto, einfach per Link.">
+  <meta property="og:image" content="https://erbsenzaehler.boredland.workers.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:url" content="https://erbsenzaehler.boredland.workers.dev">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Erbsenzähler – Erntetagebuch für Gemeinschaftsgärten">
+  <meta name="twitter:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen festhalten und Beweisfotos sammeln – ohne Konto.">
+  <meta name="twitter:image" content="https://erbsenzaehler.boredland.workers.dev/og-image.png">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -867,7 +880,7 @@
     gardenId: null,
     garden: null,
     vegetables: [],
-    lastWatering: null,
+    lastTasks: {},
     username: localStorage.getItem('garten_username') || null,
     editMode: false,
     harvestCount: 1,
@@ -1012,45 +1025,58 @@
     }
   }
 
-  // ── Watering helpers ──────────────────────────────────────────
-  function wateringStatus(lastWatering) {
-    if (!lastWatering) return { icon: '🌵', label: 'Noch nie gegossen!', urgency: 'urgent', ago: null };
-    const hoursAgo = (Date.now() / 1000 - lastWatering.watered_at) / 3600;
-    let icon, urgency;
-    if (hoursAgo < 24)       { icon = '💧'; urgency = 'ok'; }
-    else if (hoursAgo < 48)  { icon = '🌿'; urgency = 'ok'; }
-    else if (hoursAgo < 72)  { icon = '🥺'; urgency = 'warn'; }
-    else                     { icon = '🌵'; urgency = 'urgent'; }
+  // ── Recurring tasks (watering, mowing, …) ─────────────────────
+  // cadenceDays = ideal interval; ok ≤ 1×, warn ≤ 2×, urgent > 2×.
+  const TASKS = [
+    {
+      key: 'watering', label: 'Zuletzt gegossen', button: '💧 Gegossen!',
+      cadenceDays: 1, toast: '💧 Gegossen! Danke!',
+      icon: { ok: '💧', warn: '🥺', urgent: '🌵' },
+    },
+    {
+      key: 'mowing', label: 'Zuletzt gemäht', button: '🌾 Gemäht!',
+      cadenceDays: 7, toast: '🌾 Rasen gemäht!',
+      icon: { ok: '🌾', warn: '🌿', urgent: '🌳' },
+    },
+  ];
 
-    const days  = Math.floor(hoursAgo / 24);
-    const hours = Math.floor(hoursAgo);
+  function taskStatus(cfg, last) {
+    if (!last) return { icon: cfg.icon.urgent, urgency: 'urgent', ago: null };
+    const hoursAgo = (Date.now() / 1000 - last.done_at) / 3600;
+    const days = hoursAgo / 24;
+
+    let urgency;
+    if (days <= cfg.cadenceDays)       urgency = 'ok';
+    else if (days <= cfg.cadenceDays * 2) urgency = 'warn';
+    else                               urgency = 'urgent';
+
+    const wholeDays = Math.floor(days);
+    const wholeHours = Math.floor(hoursAgo);
     let ago;
-    if (hours < 1)       ago = 'Gerade eben';
-    else if (hours < 24) ago = `Vor ${hours} Std.`;
-    else if (days === 1) ago = 'Vor 1 Tag';
-    else                 ago = `Vor ${days} Tagen`;
+    if (wholeHours < 1)      ago = 'Gerade eben';
+    else if (wholeHours < 24) ago = `Vor ${wholeHours} Std.`;
+    else if (wholeDays === 1) ago = 'Vor 1 Tag';
+    else                      ago = `Vor ${wholeDays} Tagen`;
 
-    return { icon, urgency, ago, by: lastWatering.user_name, note: lastWatering.note };
+    return { icon: cfg.icon[urgency], urgency, ago, by: last.user_name, note: last.note };
   }
 
-  function renderWateringCard(lastWatering) {
-    const s = wateringStatus(lastWatering);
-    const byLine = s.by
-      ? `von ${esc(s.by)}${s.note ? ` · ${esc(s.note)}` : ''}`
-      : '';
+  function renderTaskCard(cfg, last) {
+    const s = taskStatus(cfg, last);
+    const byLine = s.by ? `von ${esc(s.by)}${s.note ? ` · ${esc(s.note)}` : ''}` : '';
     return `
-      <div class="watering-card" id="watering-card">
+      <div class="watering-card" id="task-card-${cfg.key}">
         <div class="watering-inner">
           <span class="watering-status-icon">${s.icon}</span>
           <div class="watering-info">
-            <div class="watering-label">Zuletzt gegossen</div>
+            <div class="watering-label">${cfg.label}</div>
             <div class="watering-since${s.urgency === 'urgent' ? ' urgent' : ''}">
               ${s.ago || 'Noch nie!'}
             </div>
             ${byLine ? `<div class="watering-by">${byLine}</div>` : ''}
           </div>
-          <button class="watering-btn" data-action="log-watering">
-            💧 Gegossen!
+          <button class="watering-btn" data-action="log-task" data-task="${cfg.key}">
+            ${cfg.button}
           </button>
         </div>
         <div class="watering-urgency-bar ${s.urgency}"></div>
@@ -1123,7 +1149,7 @@
           </div>
         </header>
         <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Gemüse verwalten</div>
-        ${renderWateringCard(state.lastWatering)}
+        ${TASKS.map(cfg => renderTaskCard(cfg, state.lastTasks[cfg.key])).join('')}
         <main class="garden-content" id="garden-content">
           ${gridContent}
         </main>
@@ -1496,7 +1522,7 @@
       const data = await GET(`/api/gardens/${state.gardenId}`);
       state.garden = data.garden;
       state.vegetables = data.vegetables;
-      state.lastWatering = data.lastWatering;
+      state.lastTasks = data.lastTasks || {};
       document.title = `${data.garden.name} · Erbsenzähler`;
       renderGarden();
     } catch (err) {
@@ -1611,24 +1637,28 @@
           showAddVegModal();
           break;
 
-        case 'log-watering': {
+        case 'log-task': {
+          const cfg = TASKS.find(t => t.key === btn.dataset.task);
+          if (!cfg) break;
           const doLog = async () => {
             btn.disabled = true;
             btn.textContent = '…';
             try {
-              const watering = await POST(`/api/gardens/${state.gardenId}/waterings`, {
+              const log = await POST(`/api/gardens/${state.gardenId}/tasks/${cfg.key}`, {
                 user_name: state.username,
               });
-              state.lastWatering = watering;
-              // Update the card in place without full re-render
-              const card = document.getElementById('watering-card');
-              if (card) card.outerHTML = renderWateringCard(state.lastWatering);
-              celebrate(document.querySelector('.watering-status-icon') || btn);
-              toast('💧 Gegossen! Danke!');
+              state.lastTasks[cfg.key] = log;
+              // Replace the card in place; re-query afterwards since outerHTML
+              // detaches the old node (and the clicked button with it).
+              const card = document.getElementById(`task-card-${cfg.key}`);
+              if (card) card.outerHTML = renderTaskCard(cfg, log);
+              const fresh = document.getElementById(`task-card-${cfg.key}`);
+              celebrate(fresh?.querySelector('.watering-status-icon') || fresh || document.body);
+              toast(cfg.toast);
             } catch (err) {
               toast('Fehler: ' + err.message);
               btn.disabled = false;
-              btn.textContent = '💧 Gegossen!';
+              btn.textContent = cfg.button;
             }
           };
           if (!state.username) {
