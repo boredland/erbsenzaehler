@@ -5,16 +5,15 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:create": "wrangler d1 create gartenapp-db",
-    "db:migrate": "wrangler d1 execute gartenapp-db --file=./schema.sql",
-    "db:migrate:remote": "wrangler d1 execute gartenapp-db --remote --file=./schema.sql",
-    "r2:create": "wrangler r2 bucket create gartenapp-photos"
+    "db:migrate:local": "wrangler d1 execute erbsenzaehler-db --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute erbsenzaehler-db --remote --file=./schema.sql",
+    "types": "wrangler types"
   },
   "dependencies": {
     "hono": "^4.6.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/node": "^25.9.3",
     "typescript": "^5.5.2",
     "wrangler": "^3.78.0"
   }
