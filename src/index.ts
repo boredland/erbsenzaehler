@@ -38,10 +38,6 @@ app.get('/api/gardens/:id', async (c) => {
 
   if (!garden) return c.json({ error: 'Garden not found' }, 404)
 
-  const { results: categories } = await c.env.DB.prepare(
-    'SELECT * FROM categories WHERE garden_id = ? ORDER BY sort_order ASC, created_at ASC'
-  ).bind(id).all()
-
   const { results: vegetables } = await c.env.DB.prepare(`
     SELECT v.*, COALESCE(SUM(h.count), 0) AS total_count
     FROM vegetables v
@@ -55,49 +51,22 @@ app.get('/api/gardens/:id', async (c) => {
     'SELECT * FROM waterings WHERE garden_id = ? ORDER BY watered_at DESC LIMIT 1'
   ).bind(id).first()
 
-  return c.json({ garden, categories, vegetables, lastWatering: lastWatering ?? null })
-})
-
-// ── Categories ────────────────────────────────────────────────────────────────
-
-app.post('/api/gardens/:id/categories', async (c) => {
-  const { id } = c.req.param()
-  const { name, emoji } = await c.req.json<{ name: string; emoji?: string }>()
-  if (!name?.trim()) return c.json({ error: 'Name required' }, 400)
-
-  const catId = genId()
-  await c.env.DB.prepare(
-    'INSERT INTO categories (id, garden_id, name, emoji) VALUES (?, ?, ?, ?)'
-  ).bind(catId, id, name.trim(), emoji || '🌱').run()
-
-  return c.json({ id: catId, garden_id: id, name: name.trim(), emoji: emoji || '🌱' })
-})
-
-app.delete('/api/gardens/:id/categories/:catId', async (c) => {
-  const { id, catId } = c.req.param()
-  await c.env.DB.prepare(
-    'DELETE FROM categories WHERE id = ? AND garden_id = ?'
-  ).bind(catId, id).run()
-  return c.json({ success: true })
+  return c.json({ garden, vegetables, lastWatering: lastWatering ?? null })
 })
 
 // ── Vegetables ────────────────────────────────────────────────────────────────
 
 app.post('/api/gardens/:id/vegetables', async (c) => {
   const { id } = c.req.param()
-  const { name, emoji, category_id } = await c.req.json<{
-    name: string
-    emoji?: string
-    category_id: string
-  }>()
-  if (!name?.trim() || !category_id) return c.json({ error: 'Name and category_id required' }, 400)
+  const { name, emoji } = await c.req.json<{ name: string; emoji?: string }>()
+  if (!name?.trim()) return c.json({ error: 'Name required' }, 400)
 
   const vegId = genId()
   await c.env.DB.prepare(
-    'INSERT INTO vegetables (id, garden_id, category_id, name, emoji) VALUES (?, ?, ?, ?, ?)'
-  ).bind(vegId, id, category_id, name.trim(), emoji || '🥬').run()
+    'INSERT INTO vegetables (id, garden_id, name, emoji) VALUES (?, ?, ?, ?)'
+  ).bind(vegId, id, name.trim(), emoji || '🥬').run()
 
-  return c.json({ id: vegId, garden_id: id, category_id, name: name.trim(), emoji: emoji || '🥬', total_count: 0 })
+  return c.json({ id: vegId, garden_id: id, name: name.trim(), emoji: emoji || '🥬', total_count: 0 })
 })
 
 app.delete('/api/gardens/:id/vegetables/:vegId', async (c) => {

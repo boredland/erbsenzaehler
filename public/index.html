@@ -416,57 +416,10 @@
     }
     .edit-mode .edit-mode-bar { display: block; }
 
-    /* ── Category sections ────────────────────────────────────── */
+    /* ── Garden content ───────────────────────────────────────── */
     .garden-content {
       flex: 1;
       padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    .category-section {}
-
-    .cat-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .cat-stamp {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--green);
-      color: var(--cream-light);
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      padding: 4px 10px 4px 6px;
-      border-radius: 6px;
-      border: 2px solid var(--green-2);
-    }
-    .cat-stamp-emoji { font-size: 15px; }
-    .cat-delete-btn {
-      margin-left: auto;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #c0392b;
-      font-size: 18px;
-      display: none;
-      padding: 4px;
-    }
-    .edit-mode .cat-delete-btn { display: block; }
-    .cat-line {
-      flex: 1;
-      height: 1.5px;
-      background: repeating-linear-gradient(
-        90deg,
-        var(--green-4) 0, var(--green-4) 6px,
-        transparent 6px, transparent 12px
-      );
     }
 
     /* ── Vegetable grid ───────────────────────────────────────── */
@@ -614,12 +567,6 @@
       color: var(--green-2);
       text-align: center;
     }
-
-    /* ── Add category button ──────────────────────────────────── */
-    .add-cat-row {
-      display: none;
-    }
-    .edit-mode .add-cat-row { display: flex; }
 
     /* ── Empty state ──────────────────────────────────────────── */
     .empty-state {
@@ -899,7 +846,6 @@
   const state = {
     gardenId: null,
     garden: null,
-    categories: [],
     vegetables: [],
     lastWatering: null,
     username: localStorage.getItem('garten_username') || null,
@@ -1004,10 +950,6 @@
   }
 
   // ── Render helpers ────────────────────────────────────────────
-  function vegsForCategory(catId) {
-    return state.vegetables.filter(v => v.category_id === catId);
-  }
-
   function totalHarvested() {
     return state.vegetables.reduce((s, v) => s + (v.total_count || 0), 0);
   }
@@ -1026,28 +968,6 @@
       </div>`;
   }
 
-  function renderCategorySection(cat) {
-    const vegs = vegsForCategory(cat.id);
-    return `
-      <section class="category-section" data-cat-id="${cat.id}">
-        <div class="cat-header">
-          <div class="cat-stamp">
-            <span class="cat-stamp-emoji">${cat.emoji}</span>
-            <span>${esc(cat.name.toUpperCase())}</span>
-          </div>
-          <div class="cat-line"></div>
-          <button class="cat-delete-btn" data-action="delete-cat" data-cat-id="${cat.id}" title="Kategorie löschen">✕</button>
-        </div>
-        <div class="veg-grid">
-          ${vegs.map(renderVegCard).join('')}
-          <div class="add-veg-card" data-action="open-add-veg" data-cat-id="${cat.id}">
-            <span class="add-veg-plus">+</span>
-            <span class="add-veg-label">Gemüse hinzufügen</span>
-          </div>
-        </div>
-      </section>`;
-  }
-
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -1055,13 +975,22 @@
   // ── Main render ───────────────────────────────────────────────
   function renderGarden() {
     const app = document.getElementById('app');
-    const emptyContent = state.categories.length === 0 ? `
-      <div class="empty-state">
-        <div class="empty-icon">🌱</div>
-        <h2 class="empty-title">Der Garten ist noch leer</h2>
-        <p class="empty-text">Erstelle deine erste Kategorie (z.B. Tomaten, Kräuter), um zu starten.</p>
-        <button class="btn btn-primary" data-action="enable-edit">Garten einrichten ✏️</button>
-      </div>` : state.categories.map(renderCategorySection).join('');
+    const hasVegs = state.vegetables.length > 0;
+
+    const gridContent = hasVegs
+      ? `<div class="veg-grid">
+           ${state.vegetables.map(renderVegCard).join('')}
+           <div class="add-veg-card" data-action="open-add-veg">
+             <span class="add-veg-plus">+</span>
+             <span class="add-veg-label">Gemüse hinzufügen</span>
+           </div>
+         </div>`
+      : `<div class="empty-state">
+           <div class="empty-icon">🌱</div>
+           <h2 class="empty-title">Noch nichts im Beet</h2>
+           <p class="empty-text">Füge dein erstes Gemüse hinzu, um loszulegen.</p>
+           <button class="btn btn-primary" data-action="open-add-veg">+ Gemüse hinzufügen</button>
+         </div>`;
 
     app.innerHTML = `
       <div class="screen-garden${state.editMode ? ' edit-mode' : ''}" id="garden-root">
@@ -1073,7 +1002,7 @@
             </div>
             <div class="garden-header-actions">
               <button class="icon-btn" data-action="share" title="Teilen">🔗</button>
-              <button class="icon-btn" data-action="toggle-edit" title="Bearbeiten" id="edit-toggle-btn">
+              <button class="icon-btn" data-action="toggle-edit" title="Bearbeiten">
                 ${state.editMode ? '✓' : '✏️'}
               </button>
             </div>
@@ -1082,14 +1011,10 @@
             Gesamt geerntet: <span class="garden-total-num" id="total-count">${totalHarvested()}</span> Stück 🎉
           </div>
         </header>
-        <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Kategorien &amp; Gemüse verwalten</div>
+        <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Gemüse verwalten</div>
         ${renderWateringCard(state.lastWatering)}
         <main class="garden-content" id="garden-content">
-          ${emptyContent}
-          ${state.editMode ? `
-          <div class="add-cat-row">
-            <button class="btn btn-primary btn-full" data-action="open-add-cat">+ Kategorie hinzufügen</button>
-          </div>` : ''}
+          ${gridContent}
         </main>
       </div>`;
 
@@ -1307,60 +1232,21 @@
     }
   }
 
-  function showAddCategoryModal() {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-    overlay.id = 'add-cat-modal';
-    overlay.innerHTML = `
-      <div class="modal">
-        <div class="modal-handle"></div>
-        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:16px">Neue Kategorie</h2>
-        <div class="modal-section">
-          <label class="label">Emoji</label>
-          <input class="input" id="cat-emoji" placeholder="🍅" maxlength="4" style="font-size:24px;text-align:center">
-        </div>
-        <div class="modal-section">
-          <label class="label">Name</label>
-          <input class="input" id="cat-name" placeholder="z.B. Tomaten, Kräuter, Beeren…" autofocus>
-        </div>
-        <button class="btn btn-primary btn-full" id="cat-save">Kategorie anlegen</button>
-        <button class="btn btn-ghost btn-full" id="cat-cancel" style="margin-top:8px">Abbrechen</button>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('cat-cancel').addEventListener('click', () => overlay.remove());
-    document.getElementById('cat-save').addEventListener('click', async () => {
-      const name  = document.getElementById('cat-name').value.trim();
-      const emoji = document.getElementById('cat-emoji').value.trim() || '🌱';
-      if (!name) { document.getElementById('cat-name').focus(); return; }
-      try {
-        const cat = await POST(`/api/gardens/${state.gardenId}/categories`, { name, emoji });
-        state.categories.push(cat);
-        overlay.remove();
-        renderGarden();
-        toast('Kategorie angelegt!');
-      } catch (err) { toast('Fehler: ' + err.message); }
-    });
-  }
-
-  function showAddVegModal(catId) {
-    const cat = state.categories.find(c => c.id === catId);
+  function showAddVegModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
     overlay.id = 'add-veg-modal';
     overlay.innerHTML = `
       <div class="modal">
         <div class="modal-handle"></div>
-        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:4px">Neues Gemüse</h2>
-        <p style="color:var(--muted);font-size:12px;margin-bottom:16px">in ${cat?.emoji || ''} ${esc(cat?.name || '')}</p>
+        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:16px">Neues Gemüse</h2>
         <div class="modal-section">
           <label class="label">Emoji</label>
           <input class="input" id="veg-emoji" placeholder="🥕" maxlength="4" style="font-size:24px;text-align:center">
         </div>
         <div class="modal-section">
           <label class="label">Name</label>
-          <input class="input" id="veg-name" placeholder="z.B. Cherry Tomaten, Kopfsalat…" autofocus>
+          <input class="input" id="veg-name" placeholder="z.B. Cherry Tomaten, Basilikum…" autofocus>
         </div>
         <button class="btn btn-primary btn-full" id="veg-save">Hinzufügen</button>
         <button class="btn btn-ghost btn-full" id="veg-cancel" style="margin-top:8px">Abbrechen</button>
@@ -1374,7 +1260,7 @@
       const emoji = document.getElementById('veg-emoji').value.trim() || '🥬';
       if (!name) { document.getElementById('veg-name').focus(); return; }
       try {
-        const veg = await POST(`/api/gardens/${state.gardenId}/vegetables`, { name, emoji, category_id: catId });
+        const veg = await POST(`/api/gardens/${state.gardenId}/vegetables`, { name, emoji });
         state.vegetables.push(veg);
         overlay.remove();
         renderGarden();
@@ -1495,7 +1381,6 @@
     try {
       const data = await GET(`/api/gardens/${state.gardenId}`);
       state.garden = data.garden;
-      state.categories = data.categories;
       state.vegetables = data.vegetables;
       state.lastWatering = data.lastWatering;
       renderGarden();
@@ -1580,11 +1465,6 @@
           renderGarden();
           break;
 
-        case 'enable-edit':
-          state.editMode = true;
-          renderGarden();
-          break;
-
         case 'open-harvest': {
           const vegId = btn.dataset.vegId;
           const veg = state.vegetables.find(v => v.id === vegId);
@@ -1604,25 +1484,9 @@
           break;
         }
 
-        case 'open-add-cat':
-          showAddCategoryModal();
-          break;
-
         case 'open-add-veg':
-          showAddVegModal(btn.dataset.catId);
+          showAddVegModal();
           break;
-
-        case 'delete-cat': {
-          const catId = btn.dataset.catId;
-          const cat = state.categories.find(c => c.id === catId);
-          if (!confirm(`Kategorie "${cat?.name}" und alle zugehörigen Gemüse löschen?`)) return;
-          await DEL(`/api/gardens/${state.gardenId}/categories/${catId}`);
-          state.categories = state.categories.filter(c => c.id !== catId);
-          state.vegetables = state.vegetables.filter(v => v.category_id !== catId);
-          renderGarden();
-          toast('Kategorie gelöscht.');
-          break;
-        }
 
         case 'log-watering': {
           const doLog = async () => {
