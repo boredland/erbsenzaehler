@@ -1,11 +1,15 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { sendPush, type PushSubscriptionLike, type VapidKeys } from './push'
 
 type Bindings = {
   DB: D1Database
   PHOTOS: R2Bucket
   IMAGES: ImagesBinding
   ASSETS: Fetcher
+  VAPID_PUBLIC_KEY?: string
+  VAPID_PRIVATE_KEY?: string
+  VAPID_SUBJECT?: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -14,6 +18,60 @@ app.use('/api/*', cors())
 
 function genId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+}
+
+interface PushRow {
+  id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+/**
+ * Fan out a push to every garden subscriber except the actor, pruning any
+ * endpoints the push service reports as gone. Best-effort: call via
+ * `executionCtx.waitUntil` so it never blocks the user's request.
+ */
+async function notifyGarden(
+  env: Bindings,
+  gardenId: string,
+  actorName: string,
+  payload: { title: string; body: string; url: string; tag: string },
+): Promise<void> {
+  if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, endpoint, p256dh, auth FROM push_subscriptions
+     WHERE garden_id = ? AND (user_name IS NULL OR user_name != ?)`
+  ).bind(gardenId, actorName).all<PushRow>()
+  if (!results.length) return
+
+  const vapid: VapidKeys = {
+    publicKey: env.VAPID_PUBLIC_KEY,
+    privateKey: env.VAPID_PRIVATE_KEY,
+    subject: env.VAPID_SUBJECT || 'mailto:admin@example.com',
+  }
+
+  const gone: string[] = []
+  await Promise.all(results.map(async (row) => {
+    const sub: PushSubscriptionLike = {
+      endpoint: row.endpoint,
+      keys: { p256dh: row.p256dh, auth: row.auth },
+    }
+    try {
+      const res = await sendPush(sub, payload, vapid, { urgency: 'normal', topic: payload.tag })
+      if (res.gone) gone.push(row.id)
+    } catch {
+      // Transient failure — leave the subscription for the next event.
+    }
+  }))
+
+  if (gone.length) {
+    const placeholders = gone.map(() => '?').join(',')
+    await env.DB.prepare(
+      `DELETE FROM push_subscriptions WHERE id IN (${placeholders})`
+    ).bind(...gone).run()
+  }
 }
 
 // ── Gardens ──────────────────────────────────────────────────────────────────
@@ -96,13 +154,28 @@ app.post('/api/gardens/:id/harvests', async (c) => {
   }
 
   const harvestId = genId()
+  const n = count || 1
+  const actor = user_name.trim()
   await c.env.DB.prepare(
     'INSERT INTO harvests (id, garden_id, vegetable_id, count, user_name, note) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(harvestId, id, vegetable_id, count || 1, user_name.trim(), note || null).run()
+  ).bind(harvestId, id, vegetable_id, n, actor, note || null).run()
 
   const totals = await c.env.DB.prepare(
     'SELECT COALESCE(SUM(count), 0) AS total FROM harvests WHERE vegetable_id = ?'
   ).bind(vegetable_id).first<{ total: number }>()
+
+  const veg = await c.env.DB.prepare(
+    'SELECT v.name, v.emoji, g.name AS garden_name FROM vegetables v JOIN gardens g ON g.id = v.garden_id WHERE v.id = ?'
+  ).bind(vegetable_id).first<{ name: string; emoji: string; garden_name: string }>()
+
+  if (veg) {
+    c.executionCtx.waitUntil(notifyGarden(c.env, id, actor, {
+      title: `${veg.emoji} ${veg.garden_name}`,
+      body: `${actor} hat ${n}× ${veg.name} geerntet!`,
+      url: `/?g=${id}`,
+      tag: `harvest-${id}`,
+    }))
+  }
 
   return c.json({ id: harvestId, total: totals?.total ?? 0 })
 })
@@ -140,13 +213,27 @@ app.post('/api/gardens/:id/waterings', async (c) => {
   if (!user_name?.trim()) return c.json({ error: 'user_name required' }, 400)
 
   const wateringId = genId()
+  const actor = user_name.trim()
   await c.env.DB.prepare(
     'INSERT INTO waterings (id, garden_id, user_name, note) VALUES (?, ?, ?, ?)'
-  ).bind(wateringId, id, user_name.trim(), note || null).run()
+  ).bind(wateringId, id, actor, note || null).run()
 
   const watering = await c.env.DB.prepare(
     'SELECT * FROM waterings WHERE id = ?'
   ).bind(wateringId).first()
+
+  const garden = await c.env.DB.prepare(
+    'SELECT name FROM gardens WHERE id = ?'
+  ).bind(id).first<{ name: string }>()
+
+  if (garden) {
+    c.executionCtx.waitUntil(notifyGarden(c.env, id, actor, {
+      title: `💧 ${garden.name}`,
+      body: `${actor} hat den Garten gegossen.`,
+      url: `/?g=${id}`,
+      tag: `watering-${id}`,
+    }))
+  }
 
   return c.json(watering)
 })
@@ -157,6 +244,49 @@ app.get('/api/gardens/:id/waterings', async (c) => {
     'SELECT * FROM waterings WHERE garden_id = ? ORDER BY watered_at DESC LIMIT 20'
   ).bind(id).all()
   return c.json({ waterings: results })
+})
+
+// ── Push notifications ────────────────────────────────────────────────────────
+
+app.get('/api/push/key', (c) => {
+  if (!c.env.VAPID_PUBLIC_KEY) return c.json({ error: 'Push not configured' }, 503)
+  return c.json({ publicKey: c.env.VAPID_PUBLIC_KEY }, 200, {
+    'Cache-Control': 'public, max-age=3600',
+  })
+})
+
+app.post('/api/gardens/:id/push/subscribe', async (c) => {
+  const { id } = c.req.param()
+  const body = await c.req.json<{
+    endpoint: string
+    keys: { p256dh: string; auth: string }
+    user_name?: string
+  }>()
+
+  if (!body?.endpoint?.startsWith('https://') || !body.keys?.p256dh || !body.keys?.auth) {
+    return c.json({ error: 'Invalid subscription' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO push_subscriptions (id, garden_id, endpoint, p256dh, auth, user_name)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (garden_id, endpoint) DO UPDATE SET
+       p256dh = excluded.p256dh,
+       auth = excluded.auth,
+       user_name = excluded.user_name`
+  ).bind(genId(), id, body.endpoint, body.keys.p256dh, body.keys.auth, body.user_name || null).run()
+
+  return c.json({ ok: true })
+})
+
+app.post('/api/gardens/:id/push/unsubscribe', async (c) => {
+  const { id } = c.req.param()
+  const { endpoint } = await c.req.json<{ endpoint: string }>()
+  if (!endpoint) return c.json({ error: 'endpoint required' }, 400)
+  await c.env.DB.prepare(
+    'DELETE FROM push_subscriptions WHERE garden_id = ? AND endpoint = ?'
+  ).bind(id, endpoint).run()
+  return c.json({ ok: true })
 })
 
 // ── Photos ────────────────────────────────────────────────────────────────────

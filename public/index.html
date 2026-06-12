@@ -392,6 +392,10 @@
       color: var(--cream-light);
     }
     .garden-header .icon-btn:hover { background: rgba(255,255,255,0.2); }
+    .garden-header .icon-btn.notify-on {
+      background: var(--orange);
+      border-color: var(--orange);
+    }
 
     .garden-total-bar {
       margin-top: 8px;
@@ -902,6 +906,69 @@
     }
   }
 
+  // ── Push notifications ────────────────────────────────────────
+  function urlB64ToUint8Array(s) {
+    const pad = '='.repeat((4 - s.length % 4) % 4);
+    const b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  async function currentPushSubscription() {
+    if (!pushSupported()) return null;
+    const reg = await navigator.serviceWorker.ready;
+    return reg.pushManager.getSubscription();
+  }
+
+  async function refreshNotifyButton() {
+    const btn = document.getElementById('notify-btn');
+    if (!btn) return;
+    if (!pushSupported()) { btn.style.display = 'none'; return; }
+    const sub = await currentPushSubscription();
+    const on = !!sub && Notification.permission === 'granted';
+    btn.textContent = on ? '🔔' : '🔕';
+    btn.classList.toggle('notify-on', on);
+    btn.dataset.on = on ? '1' : '0';
+  }
+
+  async function enableNotifications() {
+    if (!pushSupported()) { toast('Push wird hier nicht unterstützt'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Benachrichtigungen abgelehnt'); return; }
+
+    const { publicKey } = await GET('/api/push/key');
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(publicKey),
+    });
+    const json = sub.toJSON();
+    await POST(`/api/gardens/${state.gardenId}/push/subscribe`, {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      user_name: state.username || undefined,
+    });
+    toast('🔔 Benachrichtigungen an!');
+    refreshNotifyButton();
+  }
+
+  async function disableNotifications() {
+    const sub = await currentPushSubscription();
+    if (sub) {
+      await POST(`/api/gardens/${state.gardenId}/push/unsubscribe`, { endpoint: sub.endpoint })
+        .catch(() => {});
+      await sub.unsubscribe().catch(() => {});
+    }
+    toast('🔕 Benachrichtigungen aus');
+    refreshNotifyButton();
+  }
+
   // ── Toast ─────────────────────────────────────────────────────
   let toastTimer;
   function toast(msg) {
@@ -1030,6 +1097,7 @@
               <div class="garden-name-display">${esc(state.garden.name)}</div>
             </div>
             <div class="garden-header-actions">
+              <button class="icon-btn" data-action="toggle-notify" title="Benachrichtigungen" id="notify-btn">🔔</button>
               <button class="icon-btn" data-action="share" title="Teilen">🔗</button>
               <button class="icon-btn" data-action="toggle-edit" title="Bearbeiten">
                 ${state.editMode ? '✓' : '✏️'}
@@ -1048,6 +1116,7 @@
       </div>`;
 
     attachGardenListeners();
+    refreshNotifyButton();
   }
 
   function renderHome() {
@@ -1495,6 +1564,14 @@
         case 'toggle-edit':
           state.editMode = !state.editMode;
           renderGarden();
+          break;
+
+        case 'toggle-notify':
+          if (btn.dataset.on === '1') {
+            disableNotifications();
+          } else {
+            enableNotifications().catch(err => toast('Fehler: ' + err.message));
+          }
           break;
 
         case 'open-harvest': {
