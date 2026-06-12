@@ -1,7 +1,7 @@
 {
   "name": "Erbsenzähler",
   "short_name": "Erbsen",
-  "description": "Erntetagebuch für Gemeinschaftsgärten",
+  "description": "Gartentagebuch für Gemeinschaftsgärten",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F3EBD3",

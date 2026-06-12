@@ -24,6 +24,9 @@
     "VAPID_PUBLIC_KEY": "BDLCt7-4rnihinjzkAyWoRvyLt302PnsFgcWXPtYig3Au_qM4p9F2Rx1UzAcKUVHmbpYqLGnfD3pDDPq-hg2n8Y",
     "VAPID_SUBJECT": "mailto:jo.strassel@gmail.com"
   },
+  "triggers": {
+    "crons": ["0 6 * * *", "0 17 * * *"]
+  },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

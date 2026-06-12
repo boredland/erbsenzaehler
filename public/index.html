@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#1E3A2F">
   <title>Erbsenzähler</title>
-  <meta name="description" content="Erbsenzähler ist ein verspieltes Erntetagebuch für Gemeinschaftsgärten: Ernte zählen, Gießen & Rasenmähen festhalten und Beweisfotos teilen – ganz ohne Konto, einfach per Link.">
-  <meta property="og:title" content="Erbsenzähler – Erntetagebuch für Gemeinschaftsgärten">
-  <meta property="og:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen festhalten und Beweisfotos sammeln – ohne Konto, einfach per Link.">
+  <meta name="description" content="Erbsenzähler ist ein verspieltes Gartentagebuch für Gemeinschaftsgärten: Ernte zählen, Gießen & Rasenmähen festhalten, Beweisfotos teilen und an regenabhängige Gieß-Erinnerungen denken – ganz ohne Konto, einfach per Link.">
+  <meta property="og:title" content="Erbsenzähler – Gartentagebuch für Gemeinschaftsgärten">
+  <meta property="og:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen & Mähen festhalten, Beweisfotos sammeln und bei Trockenheit erinnert werden – ohne Konto.">
   <meta property="og:image" content="https://erbsenzaehler.boredland.workers.dev/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -15,8 +15,8 @@
   <meta property="og:locale" content="de_DE">
   <meta property="og:url" content="https://erbsenzaehler.boredland.workers.dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Erbsenzähler – Erntetagebuch für Gemeinschaftsgärten">
-  <meta name="twitter:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen festhalten und Beweisfotos sammeln – ohne Konto.">
+  <meta name="twitter:title" content="Erbsenzähler – Gartentagebuch für Gemeinschaftsgärten">
+  <meta name="twitter:description" content="Zählt die Ernte. Teilt die Freude. Gemeinsam Gemüse zählen, Gießen & Mähen festhalten, Beweisfotos sammeln – ohne Konto.">
   <meta name="twitter:image" content="https://erbsenzaehler.boredland.workers.dev/og-image.png">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -405,7 +405,8 @@
       color: var(--cream-light);
     }
     .garden-header .icon-btn:hover { background: rgba(255,255,255,0.2); }
-    .garden-header .icon-btn.notify-on {
+    .garden-header .icon-btn.notify-on,
+    .garden-header .icon-btn.icon-btn-active {
       background: var(--orange);
       border-color: var(--orange);
     }
@@ -881,6 +882,7 @@
     garden: null,
     vegetables: [],
     lastTasks: {},
+    weather: null,
     username: localStorage.getItem('garten_username') || null,
     editMode: false,
     harvestCount: 1,
@@ -907,19 +909,24 @@
   const DEL  = (p)    => api('DELETE', p);
 
   // ── Photo URLs ────────────────────────────────────────────────
-  // Originals live on the R2 public domain (offloads the Worker). Thumbnails
-  // use the Worker's webp transform. Once Cloudflare Transformations are
-  // enabled on the image domain, flip RESIZE_VIA_DOMAIN to serve thumbs via
-  // /cdn-cgi/image/ from the domain too.
+  // Images are served & resized on the R2 public domain via Cloudflare
+  // Transformations (/cdn-cgi/image/), offloading the Worker entirely.
+  // format=auto → browsers get webp/avif, others jpeg. Set RESIZE_VIA_DOMAIN
+  // false to fall back to the in-Worker /api/photos transform.
   const IMAGE_HOST = 'https://erbsenzaehler-images.jonas-strassel.de';
-  const RESIZE_VIA_DOMAIN = false;
+  const RESIZE_VIA_DOMAIN = true;
 
+  function cdnImg(gardenId, harvestId, opts) {
+    return `${IMAGE_HOST}/cdn-cgi/image/${opts}/gardens/${gardenId}/${harvestId}`;
+  }
   function photoFullUrl(gardenId, harvestId) {
-    return `${IMAGE_HOST}/gardens/${gardenId}/${harvestId}`;
+    return RESIZE_VIA_DOMAIN
+      ? cdnImg(gardenId, harvestId, 'width=1600,format=auto,quality=82')
+      : `${IMAGE_HOST}/gardens/${gardenId}/${harvestId}`;
   }
   function photoThumbUrl(gardenId, harvestId, w) {
     return RESIZE_VIA_DOMAIN
-      ? `${IMAGE_HOST}/cdn-cgi/image/width=${w},format=webp,quality=80/gardens/${gardenId}/${harvestId}`
+      ? cdnImg(gardenId, harvestId, `width=${w},format=auto,quality=80`)
       : `/api/photos/${gardenId}/${harvestId}?w=${w}`;
   }
 
@@ -1057,6 +1064,17 @@
     },
   ];
 
+  // For watering, recent rain counts as a watering: use whichever is newer.
+  function effectiveLast(cfg) {
+    let last = state.lastTasks[cfg.key] || null;
+    if (cfg.key === 'watering' && state.weather && state.weather.lastRainAt) {
+      if (!last || state.weather.lastRainAt > last.done_at) {
+        last = { done_at: state.weather.lastRainAt, byRain: true, mm: state.weather.lastRainMm };
+      }
+    }
+    return last;
+  }
+
   function taskStatus(cfg, last) {
     if (!last) return { icon: cfg.icon.urgent, urgency: 'urgent', ago: null };
     const hoursAgo = (Date.now() / 1000 - last.done_at) / 3600;
@@ -1075,12 +1093,18 @@
     else if (wholeDays === 1) ago = 'Vor 1 Tag';
     else                      ago = `Vor ${wholeDays} Tagen`;
 
-    return { icon: cfg.icon[urgency], urgency, ago, by: last.user_name, note: last.note };
+    return {
+      icon: last.byRain ? '🌧️' : cfg.icon[urgency],
+      urgency, ago, by: last.user_name, note: last.note,
+      byRain: last.byRain, mm: last.mm,
+    };
   }
 
   function renderTaskCard(cfg, last) {
     const s = taskStatus(cfg, last);
-    const byLine = s.by ? `von ${esc(s.by)}${s.note ? ` · ${esc(s.note)}` : ''}` : '';
+    const byLine = s.byRain
+      ? `🌧️ ${s.mm} mm Regen`
+      : (s.by ? `von ${esc(s.by)}${s.note ? ` · ${esc(s.note)}` : ''}` : '');
     return `
       <div class="watering-card" id="task-card-${cfg.key}">
         <div class="watering-inner">
@@ -1154,6 +1178,7 @@
               <div class="garden-name-display">${esc(state.garden.name)}</div>
             </div>
             <div class="garden-header-actions">
+              <button class="icon-btn${state.garden.location_label ? ' icon-btn-active' : ''}" data-action="location" title="Standort & Regen">📍</button>
               <button class="icon-btn" data-action="toggle-notify" title="Benachrichtigungen" id="notify-btn">🔔</button>
               <button class="icon-btn" data-action="share" title="Teilen">🔗</button>
               <button class="icon-btn" data-action="toggle-edit" title="Bearbeiten">
@@ -1166,7 +1191,7 @@
           </div>
         </header>
         <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Gemüse verwalten</div>
-        ${TASKS.map(cfg => renderTaskCard(cfg, state.lastTasks[cfg.key])).join('')}
+        ${TASKS.map(cfg => renderTaskCard(cfg, effectiveLast(cfg))).join('')}
         <main class="garden-content" id="garden-content">
           ${gridContent}
         </main>
@@ -1183,7 +1208,7 @@
           <div class="home-stamp">
             <span class="home-stamp-leaf">🌿</span>
             <div class="home-stamp-title">ERBSENZÄHLER</div>
-            <div class="home-stamp-sub">Erntetagebuch</div>
+            <div class="home-stamp-sub">Gartentagebuch</div>
           </div>
           <p class="home-tagline">Zählt die Ernte. Teilt die Freude.</p>
         </div>
@@ -1482,6 +1507,57 @@
     div.addEventListener('click', () => div.remove());
   }
 
+  function showLocationModal() {
+    const current = state.garden.location_label || '';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay modal-center open';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:24px;margin-bottom:8px">📍 Standort</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:16px">
+          Mit Adresse zählt Regen automatisch als Gießen – bei nassem Wetter bleibt die Gieß-Anzeige grün.
+        </p>
+        ${current ? `<p style="font-size:12px;color:var(--green-2);margin-bottom:12px">Aktuell: ${esc(current)}</p>` : ''}
+        <div class="modal-section">
+          <label class="label">Adresse oder Ort</label>
+          <input class="input" id="loc-input" placeholder="Musterstr. 1, 60311 Frankfurt" value="${esc(current)}" autofocus>
+        </div>
+        <button class="btn btn-primary btn-full" id="loc-save">Speichern</button>
+        ${current ? `<button class="btn btn-ghost btn-full" id="loc-clear" style="margin-top:8px">Standort entfernen</button>` : ''}
+        <button class="btn btn-ghost btn-full" id="loc-cancel" style="margin-top:8px">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('loc-cancel').addEventListener('click', () => overlay.remove());
+
+    const saveLocation = async (address) => {
+      const saveBtn = document.getElementById('loc-save');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '…';
+      try {
+        const res = await POST(`/api/gardens/${state.gardenId}/location`, { address });
+        state.garden.lat = res.lat;
+        state.garden.lon = res.lon;
+        state.garden.location_label = res.location_label;
+        overlay.remove();
+        toast(address ? '📍 Standort gespeichert!' : 'Standort entfernt.');
+        loadAndRenderGarden();
+      } catch (err) {
+        toast('Fehler: ' + err.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Speichern';
+      }
+    };
+
+    document.getElementById('loc-save').addEventListener('click', () => {
+      const v = document.getElementById('loc-input').value.trim();
+      if (!v) { document.getElementById('loc-input').focus(); return; }
+      saveLocation(v);
+    });
+    document.getElementById('loc-clear')?.addEventListener('click', () => saveLocation(''));
+  }
+
   function showCreateGardenModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay modal-center open';
@@ -1540,6 +1616,7 @@
       state.garden = data.garden;
       state.vegetables = data.vegetables;
       state.lastTasks = data.lastTasks || {};
+      state.weather = data.weather || null;
       document.title = `${data.garden.name} · Erbsenzähler`;
       renderGarden();
     } catch (err) {
@@ -1629,6 +1706,10 @@
           } else {
             enableNotifications().catch(err => toast('Fehler: ' + err.message));
           }
+          break;
+
+        case 'location':
+          showLocationModal();
           break;
 
         case 'open-harvest': {

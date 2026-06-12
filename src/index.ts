@@ -74,6 +74,94 @@ async function notifyGarden(
   }
 }
 
+// ── Weather (rain-aware watering) ─────────────────────────────────────────────
+
+/**
+ * A day with at least this much rain counts as a watering. ~4 mm is a
+ * meaningful soak that wets the root zone; below that mostly evaporates.
+ * Today's forecast is included, so an upcoming rainy day also suppresses
+ * the "needs watering" reminder.
+ */
+const RAIN_THRESHOLD_MM = 4
+const RAIN_LOOKBACK_DAYS = 7
+
+interface RainInfo {
+  lastRainAt: number | null
+  lastRainMm: number
+  totalMm: number
+  todayMm: number
+}
+
+interface PhotonProps {
+  name?: string
+  street?: string
+  housenumber?: string
+  postcode?: string
+  city?: string
+  state?: string
+  country?: string
+}
+
+function photonLabel(p: PhotonProps): string {
+  const line1 = [p.street ? `${p.street}${p.housenumber ? ' ' + p.housenumber : ''}` : p.name]
+    .filter(Boolean)
+    .join('')
+  const line2 = [p.postcode, p.city].filter(Boolean).join(' ')
+  return [line1, line2].filter(Boolean).join(', ') || p.name || p.city || 'Unbekannter Ort'
+}
+
+async function geocodeAddress(address: string): Promise<{ lat: number; lon: number; label: string } | null> {
+  const url = `https://photon.komoot.io/api/?limit=1&lang=de&q=${encodeURIComponent(address)}`
+  const res = await fetch(url, { cf: { cacheTtl: 86400, cacheEverything: true } })
+  if (!res.ok) return null
+
+  const data = await res.json<{
+    features?: Array<{ geometry?: { coordinates?: [number, number] }; properties?: PhotonProps }>
+  }>()
+  const hit = data.features?.[0]
+  const coords = hit?.geometry?.coordinates
+  if (!coords) return null
+
+  const [lon, lat] = coords
+  return { lat, lon, label: photonLabel(hit.properties ?? {}) }
+}
+
+async function fetchRecentRain(lat: number, lon: number): Promise<RainInfo | null> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&daily=precipitation_sum&past_days=${RAIN_LOOKBACK_DAYS}&forecast_days=1&timezone=auto`
+  const res = await fetch(url, { cf: { cacheTtl: 3600, cacheEverything: true } })
+  if (!res.ok) return null
+
+  const data = await res.json<{ daily?: { time?: string[]; precipitation_sum?: number[] } }>()
+  const days = data.daily?.time ?? []
+  const sums = data.daily?.precipitation_sum ?? []
+
+  const nowSec = Math.floor(Date.now() / 1000)
+  let lastRainAt: number | null = null
+  let lastRainMm = 0
+  let totalMm = 0
+  for (let i = 0; i < days.length; i++) {
+    const mm = sums[i] ?? 0
+    totalMm += mm
+    if (mm >= RAIN_THRESHOLD_MM) {
+      // Today's forecast counts as rain "now" rather than at a future noon.
+      let ts = Math.floor(new Date(`${days[i]}T12:00:00Z`).getTime() / 1000)
+      if (ts > nowSec) ts = nowSec
+      if (lastRainAt === null || ts > lastRainAt) {
+        lastRainAt = ts
+        lastRainMm = mm
+      }
+    }
+  }
+  const todayMm = days.length ? (sums[days.length - 1] ?? 0) : 0
+  return {
+    lastRainAt,
+    lastRainMm,
+    totalMm: Math.round(totalMm * 10) / 10,
+    todayMm: Math.round(todayMm * 10) / 10,
+  }
+}
+
 // ── Gardens ──────────────────────────────────────────────────────────────────
 
 app.post('/api/gardens', async (c) => {
@@ -120,7 +208,34 @@ app.get('/api/gardens/:id', async (c) => {
   const lastTasks: Record<string, unknown> = {}
   for (const row of latestTasks) lastTasks[row.task] = row
 
-  return c.json({ garden, vegetables, lastTasks })
+  const g = garden as { lat?: number | null; lon?: number | null }
+  let weather: RainInfo | null = null
+  if (typeof g.lat === 'number' && typeof g.lon === 'number') {
+    weather = await fetchRecentRain(g.lat, g.lon).catch(() => null)
+  }
+
+  return c.json({ garden, vegetables, lastTasks, weather })
+})
+
+app.post('/api/gardens/:id/location', async (c) => {
+  const { id } = c.req.param()
+  const { address } = await c.req.json<{ address: string }>()
+
+  if (!address?.trim()) {
+    await c.env.DB.prepare(
+      'UPDATE gardens SET lat = NULL, lon = NULL, location_label = NULL WHERE id = ?'
+    ).bind(id).run()
+    return c.json({ lat: null, lon: null, location_label: null })
+  }
+
+  const geo = await geocodeAddress(address.trim())
+  if (!geo) return c.json({ error: 'Adresse nicht gefunden' }, 404)
+
+  await c.env.DB.prepare(
+    'UPDATE gardens SET lat = ?, lon = ?, location_label = ? WHERE id = ?'
+  ).bind(geo.lat, geo.lon, geo.label, id).run()
+
+  return c.json({ lat: geo.lat, lon: geo.lon, location_label: geo.label })
 })
 
 // ── Vegetables ────────────────────────────────────────────────────────────────
@@ -347,4 +462,53 @@ app.get('/api/photos/:gardenId/:harvestId', async (c) => {
 
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw))
 
-export default app
+// ── Scheduled watering reminders (morning & evening cron) ─────────────────────
+
+const WATERING_CADENCE_SEC = 24 * 60 * 60
+
+/**
+ * For every garden with push subscribers, push a reminder when watering is due —
+ * i.e. neither a manual watering nor meaningful rain within the cadence window.
+ */
+async function runWateringReminders(env: Bindings): Promise<void> {
+  const { results: gardens } = await env.DB.prepare(`
+    SELECT DISTINCT g.id, g.name, g.lat, g.lon
+    FROM gardens g
+    JOIN push_subscriptions p ON p.garden_id = g.id
+  `).all<{ id: string; name: string; lat: number | null; lon: number | null }>()
+
+  const now = Date.now() / 1000
+
+  for (const g of gardens) {
+    const lastWater = await env.DB.prepare(
+      `SELECT done_at FROM task_logs WHERE garden_id = ? AND task = 'watering' ORDER BY done_at DESC LIMIT 1`
+    ).bind(g.id).first<{ done_at: number }>()
+
+    let effective = lastWater?.done_at ?? 0
+    if (typeof g.lat === 'number' && typeof g.lon === 'number') {
+      const rain = await fetchRecentRain(g.lat, g.lon).catch(() => null)
+      if (rain?.lastRainAt && rain.lastRainAt > effective) effective = rain.lastRainAt
+    }
+
+    if (now - effective <= WATERING_CADENCE_SEC) continue
+
+    const days = Math.floor((now - effective) / 86400)
+    const body = effective === 0
+      ? 'Noch nie gegossen – Zeit zum Gießen! 💧'
+      : `Seit ${days} ${days === 1 ? 'Tag' : 'Tagen'} nicht gegossen – Zeit zum Gießen! 💧`
+
+    await notifyGarden(env, g.id, '', {
+      title: `💧 ${g.name}`,
+      body,
+      url: `/?g=${g.id}`,
+      tag: `reminder-${g.id}`,
+    })
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  scheduled(_controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(runWateringReminders(env))
+  },
+}
