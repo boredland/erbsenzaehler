@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark green background -->
+  <rect width="32" height="32" rx="7" fill="#1E3A2F"/>
+  <!-- Pod body -->
+  <path d="M4 22 Q5 7 28 9 Q28 25 4 22Z" fill="#2D6A4F"/>
+  <!-- Pod highlight edge -->
+  <path d="M4 22 Q5 7 28 9" stroke="#52B07A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Three peas -->
+  <circle cx="10" cy="17" r="3.4" fill="#F3EBD3"/>
+  <circle cx="17.5" cy="15.5" r="3.4" fill="#F3EBD3"/>
+  <circle cx="24.5" cy="17" r="3.4" fill="#F3EBD3"/>
+  <!-- Curly tendril -->
+  <path d="M28 9 Q32 5 29 2" stroke="#52B07A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>
