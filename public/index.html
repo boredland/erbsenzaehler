@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1E3A2F">
+  <title>Erbsenzähler 🌿</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Erbsenzähler">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream:        #F3EBD3;
+      --cream-light:  #FAF5E8;
+      --cream-dark:   #E4D9BE;
+      --green:        #1E3A2F;
+      --green-2:      #2D5D47;
+      --green-3:      #4A8C6F;
+      --green-4:      #A8D5BA;
+      --green-5:      #E0F0E8;
+      --orange:       #C85200;
+      --orange-2:     #E87020;
+      --orange-light: #FFE8CC;
+      --yellow:       #D4A820;
+      --text:         #1A1A1A;
+      --muted:        #6B5E4A;
+      --border:       2.5px solid var(--green);
+      --radius:       12px;
+      --radius-lg:    18px;
+      --shadow:       0 2px 0 var(--green);
+      --shadow-lg:    0 4px 0 var(--green);
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-body:    'DM Mono', 'Courier New', monospace;
+      --max-w:        480px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--cream);
+      color: var(--text);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Paper texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    #app {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Typography ───────────────────────────────────────────── */
+    h1, h2, h3 { font-family: var(--font-display); font-weight: 700; line-height: 1.1; }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 500;
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      border: var(--border);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      text-decoration: none;
+      white-space: nowrap;
+      letter-spacing: 0.03em;
+    }
+    .btn:active { transform: translateY(2px); box-shadow: none !important; }
+    .btn-primary {
+      background: var(--green);
+      color: var(--cream-light);
+      box-shadow: var(--shadow-lg);
+    }
+    .btn-primary:hover { background: var(--green-2); }
+    .btn-orange {
+      background: var(--orange);
+      color: #fff;
+      border-color: var(--orange);
+      box-shadow: 0 4px 0 #7A3200;
+    }
+    .btn-orange:hover { background: var(--orange-2); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--green);
+      box-shadow: none;
+    }
+    .btn-ghost:hover { background: var(--green-5); }
+    .btn-danger {
+      background: #8B2020;
+      color: #fff;
+      border-color: #8B2020;
+      box-shadow: 0 4px 0 #5A1010;
+    }
+    .btn-full { width: 100%; }
+
+    /* ── Inputs ───────────────────────────────────────────────── */
+    .input {
+      width: 100%;
+      padding: 12px 14px;
+      font-family: var(--font-body);
+      font-size: 14px;
+      background: var(--cream-light);
+      border: var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      outline: none;
+      transition: box-shadow 0.15s;
+    }
+    .input:focus { box-shadow: 0 0 0 3px var(--green-4); }
+    .input::placeholder { color: var(--muted); }
+
+    textarea.input { resize: vertical; min-height: 70px; }
+
+    /* ── Icon button ──────────────────────────────────────────── */
+    .icon-btn {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--cream-light);
+      border: var(--border);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      transition: transform 0.1s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { background: var(--green-5); }
+    .icon-btn:active { transform: scale(0.92); }
+
+    /* ── Label ────────────────────────────────────────────────── */
+    .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    /* ── Modal ────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(30,58,47,0.55);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 1000;
+      padding: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal {
+      background: var(--cream-light);
+      border: var(--border);
+      border-bottom: none;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      width: 100%;
+      max-width: var(--max-w);
+      max-height: 92svh;
+      overflow-y: auto;
+      padding: 24px 20px 32px;
+      transform: translateY(30px);
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .modal-overlay.open .modal {
+      transform: translateY(0);
+    }
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--cream-dark);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+    .modal-center {
+      align-items: center;
+    }
+    .modal-center .modal {
+      border-radius: var(--radius-lg);
+      border-bottom: var(--border);
+      max-width: 340px;
+      margin: 20px;
+    }
+    .modal-title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .modal-emoji { font-size: 28px; }
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 1;
+    }
+    .modal-section { margin-bottom: 18px; }
+
+    /* ── Home Screen ──────────────────────────────────────────── */
+    .screen-home {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      gap: 0;
+    }
+
+    .home-hero {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .home-stamp {
+      display: inline-block;
+      border: 3px solid var(--green);
+      border-radius: 8px;
+      padding: 28px 32px;
+      margin-bottom: 16px;
+      position: relative;
+      background: var(--cream-light);
+      box-shadow: 6px 6px 0 var(--green);
+    }
+    .home-stamp::before {
+      content: '✦ ✦ ✦';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--cream);
+      padding: 0 8px;
+      font-size: 10px;
+      color: var(--green-3);
+      letter-spacing: 4px;
+    }
+    .home-stamp-leaf {
+      font-size: 52px;
+      display: block;
+      margin-bottom: 4px;
+      filter: drop-shadow(2px 3px 0 rgba(0,0,0,0.15));
+    }
+    .home-stamp-title {
+      font-family: var(--font-display);
+      font-size: 38px;
+      font-weight: 900;
+      color: var(--green);
+      line-height: 1;
+      letter-spacing: -1px;
+    }
+    .home-stamp-sub {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .home-tagline {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 17px;
+      color: var(--green-2);
+    }
+
+    .home-card {
+      background: var(--cream-light);
+      border: var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--cream-dark);
+    }
+
+    .home-footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ── Garden Screen ────────────────────────────────────────── */
+    .screen-garden {
+      display: flex;
+      flex-direction: column;
+      min-height: 100svh;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .garden-header {
+      background: var(--green);
+      color: var(--cream-light);
+      padding: 16px 16px 14px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 2.5px solid #0D2219;
+    }
+    .garden-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .garden-header-left { flex: 1; min-width: 0; }
+    .garden-badge {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--green-4);
+      font-weight: 500;
+    }
+    .garden-name-display {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--cream-light);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .garden-header-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .garden-header .icon-btn {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.25);
+      color: var(--cream-light);
+    }
+    .garden-header .icon-btn:hover { background: rgba(255,255,255,0.2); }
+
+    .garden-total-bar {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--green-4);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .garden-total-num {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--orange-light);
+    }
+
+    .edit-mode-bar {
+      background: var(--orange);
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      padding: 6px 16px;
+      font-weight: 500;
+      display: none;
+    }
+    .edit-mode .edit-mode-bar { display: block; }
+
+    /* ── Category sections ────────────────────────────────────── */
+    .garden-content {
+      flex: 1;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .category-section {}
+
+    .cat-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .cat-stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--green);
+      color: var(--cream-light);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 10px 4px 6px;
+      border-radius: 6px;
+      border: 2px solid var(--green-2);
+    }
+    .cat-stamp-emoji { font-size: 15px; }
+    .cat-delete-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #c0392b;
+      font-size: 18px;
+      display: none;
+      padding: 4px;
+    }
+    .edit-mode .cat-delete-btn { display: block; }
+    .cat-line {
+      flex: 1;
+      height: 1.5px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--green-4) 0, var(--green-4) 6px,
+        transparent 6px, transparent 12px
+      );
+    }
+
+    /* ── Vegetable grid ───────────────────────────────────────── */
+    .veg-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .veg-card {
+      background: var(--cream-light);
+      border: var(--border);
+      border-radius: var(--radius);
+      padding: 14px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      cursor: default;
+    }
+    .veg-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--green-4);
+    }
+    .veg-emoji {
+      font-size: 32px;
+      line-height: 1;
+      filter: drop-shadow(1px 2px 0 rgba(0,0,0,0.1));
+    }
+    .veg-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-align: center;
+      margin-top: 2px;
+    }
+    .veg-count {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: 900;
+      color: var(--green);
+      line-height: 1;
+      margin: 4px 0;
+      transition: color 0.3s;
+    }
+    .veg-count.pop {
+      animation: count-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes count-pop {
+      0%   { transform: scale(1); color: var(--green); }
+      40%  { transform: scale(1.35); color: var(--orange); }
+      100% { transform: scale(1); color: var(--green); }
+    }
+    .veg-unit {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .harvest-btn {
+      margin-top: 6px;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--orange);
+      border: 2.5px solid #7A3200;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 300;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 0 #7A3200;
+      transition: transform 0.1s, box-shadow 0.1s;
+      line-height: 1;
+    }
+    .harvest-btn:active {
+      transform: translateY(3px);
+      box-shadow: none;
+    }
+    .harvest-btn:hover { background: var(--orange-2); }
+
+    .veg-delete-btn {
+      position: absolute;
+      top: 6px; right: 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #c0392b;
+      display: none;
+      line-height: 1;
+      padding: 2px;
+    }
+    .edit-mode .veg-delete-btn { display: block; }
+    .edit-mode .harvest-btn { display: none; }
+    .edit-mode .veg-count { font-size: 28px; color: var(--muted); }
+
+    .veg-photo-btn {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--green-2);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-family: var(--font-body);
+      display: none;
+      text-decoration: underline;
+      text-decoration-color: var(--green-4);
+    }
+    .veg-card.has-photos .veg-photo-btn { display: block; }
+    .edit-mode .veg-photo-btn { display: none; }
+
+    /* Add vegetable card */
+    .add-veg-card {
+      background: var(--green-5);
+      border: 2.5px dashed var(--green-3);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 20px 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: none;
+    }
+    .edit-mode .add-veg-card { display: flex; }
+    .add-veg-card:hover { background: var(--green-4); }
+    .add-veg-plus {
+      font-size: 26px;
+      color: var(--green-2);
+      line-height: 1;
+    }
+    .add-veg-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--green-2);
+      text-align: center;
+    }
+
+    /* ── Add category button ──────────────────────────────────── */
+    .add-cat-row {
+      display: none;
+    }
+    .edit-mode .add-cat-row { display: flex; }
+
+    /* ── Empty state ──────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 12px; }
+    .empty-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      color: var(--green);
+      margin-bottom: 8px;
+    }
+    .empty-text { font-size: 13px; margin-bottom: 20px; }
+
+    /* ── Harvest count stepper ────────────────────────────────── */
+    .count-stepper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      border: var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--cream-light);
+    }
+    .count-step-btn {
+      width: 52px; height: 52px;
+      font-size: 24px;
+      font-weight: 300;
+      border: none;
+      background: var(--green-5);
+      color: var(--green);
+      cursor: pointer;
+      font-family: var(--font-body);
+      transition: background 0.1s;
+      flex-shrink: 0;
+    }
+    .count-step-btn:hover { background: var(--green-4); }
+    .count-step-btn:active { background: var(--green-3); color: #fff; }
+    .count-display {
+      flex: 1;
+      text-align: center;
+      font-family: var(--font-display);
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--green);
+      padding: 0 8px;
+    }
+
+    /* ── Photo upload ─────────────────────────────────────────── */
+    .photo-upload-area {
+      border: 2px dashed var(--green-3);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      background: var(--green-5);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .photo-upload-area:hover { background: var(--green-4); border-color: var(--green); }
+    .photo-upload-area.has-photo {
+      padding: 6px;
+      border-style: solid;
+    }
+    .photo-upload-icon { font-size: 24px; margin-bottom: 4px; }
+    .photo-upload-text { font-size: 12px; color: var(--green-2); }
+    .photo-preview-img {
+      width: 100%;
+      border-radius: 8px;
+      display: none;
+      max-height: 200px;
+      object-fit: cover;
+    }
+    .has-photo .photo-preview-img { display: block; }
+    .has-photo .photo-upload-icon,
+    .has-photo .photo-upload-text { display: none; }
+
+    /* ── Photo gallery modal ──────────────────────────────────── */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .gallery-thumb {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      object-fit: cover;
+      width: 100%;
+      border: 2px solid var(--cream-dark);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .gallery-thumb:hover { transform: scale(1.02); }
+    .gallery-harvest-info {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* ── Flying leaves animation ──────────────────────────────── */
+    .flying-leaf {
+      position: fixed;
+      font-size: 18px;
+      pointer-events: none;
+      z-index: 9000;
+      animation: fly-leaf 0.9s ease-out forwards;
+    }
+    @keyframes fly-leaf {
+      0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) rotate(var(--dr)) scale(0.5); opacity: 0; }
+    }
+
+    /* ── Toast ────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--green);
+      color: var(--cream-light);
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 5000;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Spinner ──────────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2.5px solid var(--green-4);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    .screen-loading {
+      min-height: 100svh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Watering card ────────────────────────────────────────── */
+    .watering-card {
+      margin: 12px 16px 0;
+      background: var(--cream-light);
+      border: var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .watering-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+    }
+    .watering-status-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+      line-height: 1;
+      filter: drop-shadow(1px 2px 0 rgba(0,0,0,0.1));
+    }
+    .watering-info { flex: 1; min-width: 0; }
+    .watering-label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .watering-since {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--green);
+    }
+    .watering-since.urgent { color: #8B2020; }
+    .watering-by {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .watering-btn {
+      flex-shrink: 0;
+      background: #1A6FA8;
+      color: #fff;
+      border: 2.5px solid #0D4A75;
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #0D4A75;
+      transition: transform 0.1s, box-shadow 0.1s;
+      white-space: nowrap;
+    }
+    .watering-btn:hover { background: #2180B8; }
+    .watering-btn:active { transform: translateY(3px); box-shadow: none; }
+
+    /* urgency indicator strip at the bottom of the card */
+    .watering-urgency-bar {
+      height: 4px;
+      background: var(--green-4);
+      transition: background 0.4s;
+    }
+    .watering-urgency-bar.ok     { background: #52B07A; }
+    .watering-urgency-bar.warn   { background: var(--yellow); }
+    .watering-urgency-bar.urgent { background: #C83030; }
+
+    /* ── Fullscreen photo ─────────────────────────────────────── */
+    .photo-fullscreen {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+    .photo-fullscreen img {
+      max-width: 95vw;
+      max-height: 95svh;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+    .photo-fullscreen-close {
+      position: fixed;
+      top: 16px; right: 16px;
+      color: #fff;
+      font-size: 28px;
+      cursor: pointer;
+      background: rgba(0,0,0,0.5);
+      border: none;
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Desktop centering ────────────────────────────────────── */
+    @media (min-width: 520px) {
+      .screen-garden {
+        border-left: var(--border);
+        border-right: var(--border);
+        box-shadow: 8px 0 0 -5px var(--cream-dark), -8px 0 0 -5px var(--cream-dark);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="screen-loading"><div class="spinner"></div></div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────────────
+  const state = {
+    gardenId: null,
+    garden: null,
+    categories: [],
+    vegetables: [],
+    lastWatering: null,
+    username: localStorage.getItem('garten_username') || null,
+    editMode: false,
+    harvestCount: 1,
+    harvestVeg: null,
+    harvestPhotoFile: null,
+    pendingHarvestId: null,
+  };
+
+  // ── API helpers ───────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body && !(body instanceof FormData)) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    } else if (body) {
+      opts.body = body;
+    }
+    const res = await fetch(path, opts);
+    if (!res.ok) throw new Error((await res.json()).error || 'Fehler');
+    return res.json();
+  }
+  const GET  = (p)    => api('GET', p);
+  const POST = (p, b) => api('POST', p, b);
+  const DEL  = (p)    => api('DELETE', p);
+
+  // ── Toast ─────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  // ── Flying leaves celebration ──────────────────────────────────
+  function celebrate(el) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const emojis = ['🍃', '🌿', '✿', '🌱', '🍀', '☘️'];
+    for (let i = 0; i < 7; i++) {
+      const leaf = document.createElement('span');
+      leaf.className = 'flying-leaf';
+      leaf.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      leaf.style.left = cx + 'px';
+      leaf.style.top  = cy + 'px';
+      leaf.style.setProperty('--dx', (Math.random() - 0.5) * 120 + 'px');
+      leaf.style.setProperty('--dy', -(60 + Math.random() * 120) + 'px');
+      leaf.style.setProperty('--dr', (Math.random() - 0.5) * 180 + 'deg');
+      leaf.style.animationDelay = (Math.random() * 0.15) + 's';
+      document.body.appendChild(leaf);
+      setTimeout(() => leaf.remove(), 1100);
+    }
+  }
+
+  // ── Watering helpers ──────────────────────────────────────────
+  function wateringStatus(lastWatering) {
+    if (!lastWatering) return { icon: '🌵', label: 'Noch nie gegossen!', urgency: 'urgent', ago: null };
+    const hoursAgo = (Date.now() / 1000 - lastWatering.watered_at) / 3600;
+    let icon, urgency;
+    if (hoursAgo < 24)       { icon = '💧'; urgency = 'ok'; }
+    else if (hoursAgo < 48)  { icon = '🌿'; urgency = 'ok'; }
+    else if (hoursAgo < 72)  { icon = '🥺'; urgency = 'warn'; }
+    else                     { icon = '🌵'; urgency = 'urgent'; }
+
+    const days  = Math.floor(hoursAgo / 24);
+    const hours = Math.floor(hoursAgo);
+    let ago;
+    if (hours < 1)       ago = 'Gerade eben';
+    else if (hours < 24) ago = `Vor ${hours} Std.`;
+    else if (days === 1) ago = 'Vor 1 Tag';
+    else                 ago = `Vor ${days} Tagen`;
+
+    return { icon, urgency, ago, by: lastWatering.user_name, note: lastWatering.note };
+  }
+
+  function renderWateringCard(lastWatering) {
+    const s = wateringStatus(lastWatering);
+    const byLine = s.by
+      ? `von ${esc(s.by)}${s.note ? ` · ${esc(s.note)}` : ''}`
+      : '';
+    return `
+      <div class="watering-card" id="watering-card">
+        <div class="watering-inner">
+          <span class="watering-status-icon">${s.icon}</span>
+          <div class="watering-info">
+            <div class="watering-label">Zuletzt gegossen</div>
+            <div class="watering-since${s.urgency === 'urgent' ? ' urgent' : ''}">
+              ${s.ago || 'Noch nie!'}
+            </div>
+            ${byLine ? `<div class="watering-by">${byLine}</div>` : ''}
+          </div>
+          <button class="watering-btn" data-action="log-watering">
+            💧 Gegossen!
+          </button>
+        </div>
+        <div class="watering-urgency-bar ${s.urgency}"></div>
+      </div>`;
+  }
+
+  // ── Render helpers ────────────────────────────────────────────
+  function vegsForCategory(catId) {
+    return state.vegetables.filter(v => v.category_id === catId);
+  }
+
+  function totalHarvested() {
+    return state.vegetables.reduce((s, v) => s + (v.total_count || 0), 0);
+  }
+
+  function renderVegCard(veg) {
+    const hasPhotos = veg.has_photos;
+    return `
+      <div class="veg-card${hasPhotos ? ' has-photos' : ''}" data-veg-id="${veg.id}">
+        <button class="veg-delete-btn" data-action="delete-veg" data-veg-id="${veg.id}" title="Löschen">✕</button>
+        <span class="veg-emoji">${veg.emoji}</span>
+        <span class="veg-name">${esc(veg.name)}</span>
+        <span class="veg-count" id="count-${veg.id}">${veg.total_count || 0}</span>
+        <span class="veg-unit">geerntet</span>
+        <button class="harvest-btn" data-action="open-harvest" data-veg-id="${veg.id}" title="Ernte eintragen">+</button>
+        <button class="veg-photo-btn" data-action="open-gallery" data-veg-id="${veg.id}">📷 Fotos</button>
+      </div>`;
+  }
+
+  function renderCategorySection(cat) {
+    const vegs = vegsForCategory(cat.id);
+    return `
+      <section class="category-section" data-cat-id="${cat.id}">
+        <div class="cat-header">
+          <div class="cat-stamp">
+            <span class="cat-stamp-emoji">${cat.emoji}</span>
+            <span>${esc(cat.name.toUpperCase())}</span>
+          </div>
+          <div class="cat-line"></div>
+          <button class="cat-delete-btn" data-action="delete-cat" data-cat-id="${cat.id}" title="Kategorie löschen">✕</button>
+        </div>
+        <div class="veg-grid">
+          ${vegs.map(renderVegCard).join('')}
+          <div class="add-veg-card" data-action="open-add-veg" data-cat-id="${cat.id}">
+            <span class="add-veg-plus">+</span>
+            <span class="add-veg-label">Gemüse hinzufügen</span>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Main render ───────────────────────────────────────────────
+  function renderGarden() {
+    const app = document.getElementById('app');
+    const emptyContent = state.categories.length === 0 ? `
+      <div class="empty-state">
+        <div class="empty-icon">🌱</div>
+        <h2 class="empty-title">Der Garten ist noch leer</h2>
+        <p class="empty-text">Erstelle deine erste Kategorie (z.B. Tomaten, Kräuter), um zu starten.</p>
+        <button class="btn btn-primary" data-action="enable-edit">Garten einrichten ✏️</button>
+      </div>` : state.categories.map(renderCategorySection).join('');
+
+    app.innerHTML = `
+      <div class="screen-garden${state.editMode ? ' edit-mode' : ''}" id="garden-root">
+        <header class="garden-header">
+          <div class="garden-header-top">
+            <div class="garden-header-left">
+              <div class="garden-badge">🌿 GARTEN</div>
+              <div class="garden-name-display">${esc(state.garden.name)}</div>
+            </div>
+            <div class="garden-header-actions">
+              <button class="icon-btn" data-action="share" title="Teilen">🔗</button>
+              <button class="icon-btn" data-action="toggle-edit" title="Bearbeiten" id="edit-toggle-btn">
+                ${state.editMode ? '✓' : '✏️'}
+              </button>
+            </div>
+          </div>
+          <div class="garden-total-bar">
+            Gesamt geerntet: <span class="garden-total-num" id="total-count">${totalHarvested()}</span> Stück 🎉
+          </div>
+        </header>
+        <div class="edit-mode-bar">✏️ Bearbeitungsmodus — Kategorien &amp; Gemüse verwalten</div>
+        ${renderWateringCard(state.lastWatering)}
+        <main class="garden-content" id="garden-content">
+          ${emptyContent}
+          ${state.editMode ? `
+          <div class="add-cat-row">
+            <button class="btn btn-primary btn-full" data-action="open-add-cat">+ Kategorie hinzufügen</button>
+          </div>` : ''}
+        </main>
+      </div>`;
+
+    attachGardenListeners();
+  }
+
+  function renderHome() {
+    document.getElementById('app').innerHTML = `
+      <div class="screen-home">
+        <div class="home-hero">
+          <div class="home-stamp">
+            <span class="home-stamp-leaf">🌿</span>
+            <div class="home-stamp-title">ERBSENZÄHLER</div>
+            <div class="home-stamp-sub">Erntetagebuch</div>
+          </div>
+          <p class="home-tagline">Zählt die Ernte. Teilt die Freude.</p>
+        </div>
+        <div class="home-card">
+          <button class="btn btn-primary btn-full" data-action="open-create-garden" style="margin-bottom:0">
+            🌱 Neuen Garten anlegen
+          </button>
+          <div class="divider">oder bestehenden öffnen</div>
+          <div style="display:flex;gap:8px">
+            <input class="input" id="join-input" placeholder="Garten-ID oder Link..." style="flex:1">
+            <button class="btn btn-primary" data-action="join-garden" style="padding:12px 14px">→</button>
+          </div>
+        </div>
+        <p class="home-footer">Kein Konto nötig · Einfach Link teilen · Sofort loslegen</p>
+      </div>`;
+    attachHomeListeners();
+  }
+
+  // ── Modals ────────────────────────────────────────────────────
+  function openModal(id) {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('open'); }
+  }
+  function closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('open'); }
+  }
+
+  function showUsernameModal(onDone) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay modal-center open';
+    overlay.id = 'username-modal';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:24px;margin-bottom:8px">Wer bist du? 👋</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Dein Name erscheint bei der Ernte.</p>
+        <div class="modal-section">
+          <label class="label">Dein Name</label>
+          <input class="input" id="un-input" placeholder="Gartenzwerg, Tomaten-Jonas..." maxlength="40" autofocus>
+        </div>
+        <button class="btn btn-primary btn-full" id="un-save">Loslegen →</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const save = () => {
+      const val = document.getElementById('un-input').value.trim();
+      if (!val) { document.getElementById('un-input').focus(); return; }
+      state.username = val;
+      localStorage.setItem('garten_username', val);
+      overlay.remove();
+      onDone?.();
+    };
+    document.getElementById('un-save').addEventListener('click', save);
+    document.getElementById('un-input').addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+  }
+
+  function showHarvestModal(veg) {
+    state.harvestVeg = veg;
+    state.harvestCount = 1;
+    state.harvestPhotoFile = null;
+
+    const existing = document.getElementById('harvest-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'harvest-modal';
+    overlay.innerHTML = `
+      <div class="modal" style="position:relative">
+        <div class="modal-handle"></div>
+        <div class="modal-title-area">
+          <span class="modal-emoji">${veg.emoji}</span>
+          <h2 class="modal-title">${esc(veg.name)}</h2>
+        </div>
+
+        <div class="modal-section">
+          <label class="label">Wie viele geerntet?</label>
+          <div class="count-stepper">
+            <button class="count-step-btn" id="h-minus">−</button>
+            <span class="count-display" id="h-count">1</span>
+            <button class="count-step-btn" id="h-plus">+</button>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <label class="label">Beweisfoto (optional)</label>
+          <div class="photo-upload-area" id="photo-drop" title="Foto hinzufügen">
+            <input type="file" id="photo-file-input" accept="image/*" capture="environment" style="display:none">
+            <div class="photo-upload-icon">📷</div>
+            <div class="photo-upload-text">Tippen zum Aufnehmen oder Auswählen</div>
+            <img class="photo-preview-img" id="photo-prev">
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <label class="label">Notiz (optional)</label>
+          <textarea class="input" id="h-note" placeholder="Riesenexemplar! Endlich reif…" rows="2"></textarea>
+        </div>
+
+        <button class="btn btn-orange btn-full" id="h-submit">Ernte eintragen 🎉</button>
+        <button class="btn btn-ghost btn-full" id="h-cancel" style="margin-top:8px">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeHarvestModal(); });
+    document.getElementById('h-cancel').addEventListener('click', closeHarvestModal);
+
+    const minus = document.getElementById('h-minus');
+    const plus  = document.getElementById('h-plus');
+    const countEl = document.getElementById('h-count');
+    minus.addEventListener('click', () => {
+      if (state.harvestCount > 1) { state.harvestCount--; countEl.textContent = state.harvestCount; }
+    });
+    plus.addEventListener('click', () => {
+      state.harvestCount++;
+      countEl.textContent = state.harvestCount;
+    });
+
+    const photoDrop = document.getElementById('photo-drop');
+    const photoInput = document.getElementById('photo-file-input');
+    photoDrop.addEventListener('click', () => photoInput.click());
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files[0];
+      if (!file) return;
+      state.harvestPhotoFile = file;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('photo-prev').src = e.target.result;
+        photoDrop.classList.add('has-photo');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('h-submit').addEventListener('click', submitHarvest);
+  }
+
+  function closeHarvestModal() {
+    const el = document.getElementById('harvest-modal');
+    if (el) { el.classList.remove('open'); setTimeout(() => el.remove(), 300); }
+  }
+
+  async function submitHarvest() {
+    const submitBtn = document.getElementById('h-submit');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '…';
+
+    const note = document.getElementById('h-note')?.value.trim() || '';
+
+    try {
+      const data = await POST(`/api/gardens/${state.gardenId}/harvests`, {
+        vegetable_id: state.harvestVeg.id,
+        count: state.harvestCount,
+        user_name: state.username,
+        note: note || undefined,
+      });
+
+      if (state.harvestPhotoFile) {
+        try {
+          const form = new FormData();
+          form.append('photo', state.harvestPhotoFile);
+          await fetch(`/api/gardens/${state.gardenId}/harvests/${data.id}/photo`, {
+            method: 'POST', body: form,
+          });
+          // Mark this veg as having photos
+          const vegInState = state.vegetables.find(v => v.id === state.harvestVeg.id);
+          if (vegInState) vegInState.has_photos = true;
+        } catch (_) { /* photo upload failure is non-fatal */ }
+      }
+
+      // Update count in state & DOM without full re-render
+      const vegInState = state.vegetables.find(v => v.id === state.harvestVeg.id);
+      if (vegInState) {
+        vegInState.total_count = data.total;
+        if (vegInState.has_photos) {
+          const card = document.querySelector(`[data-veg-id="${vegInState.id}"]`);
+          if (card) card.classList.add('has-photos');
+        }
+      }
+
+      const countEl = document.getElementById(`count-${state.harvestVeg.id}`);
+      if (countEl) {
+        countEl.textContent = data.total;
+        countEl.classList.remove('pop');
+        void countEl.offsetWidth;
+        countEl.classList.add('pop');
+      }
+
+      const totalEl = document.getElementById('total-count');
+      if (totalEl) totalEl.textContent = totalHarvested();
+
+      const btn = document.querySelector(`[data-action="open-harvest"][data-veg-id="${state.harvestVeg.id}"]`);
+      if (btn) celebrate(btn);
+
+      closeHarvestModal();
+      toast(`+${state.harvestCount} ${state.harvestVeg.emoji} ${state.harvestVeg.name} eingetragen!`);
+    } catch (err) {
+      toast('Fehler: ' + err.message);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Ernte eintragen 🎉';
+    }
+  }
+
+  function showAddCategoryModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'add-cat-modal';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:16px">Neue Kategorie</h2>
+        <div class="modal-section">
+          <label class="label">Emoji</label>
+          <input class="input" id="cat-emoji" placeholder="🍅" maxlength="4" style="font-size:24px;text-align:center">
+        </div>
+        <div class="modal-section">
+          <label class="label">Name</label>
+          <input class="input" id="cat-name" placeholder="z.B. Tomaten, Kräuter, Beeren…" autofocus>
+        </div>
+        <button class="btn btn-primary btn-full" id="cat-save">Kategorie anlegen</button>
+        <button class="btn btn-ghost btn-full" id="cat-cancel" style="margin-top:8px">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('cat-cancel').addEventListener('click', () => overlay.remove());
+    document.getElementById('cat-save').addEventListener('click', async () => {
+      const name  = document.getElementById('cat-name').value.trim();
+      const emoji = document.getElementById('cat-emoji').value.trim() || '🌱';
+      if (!name) { document.getElementById('cat-name').focus(); return; }
+      try {
+        const cat = await POST(`/api/gardens/${state.gardenId}/categories`, { name, emoji });
+        state.categories.push(cat);
+        overlay.remove();
+        renderGarden();
+        toast('Kategorie angelegt!');
+      } catch (err) { toast('Fehler: ' + err.message); }
+    });
+  }
+
+  function showAddVegModal(catId) {
+    const cat = state.categories.find(c => c.id === catId);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'add-veg-modal';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:4px">Neues Gemüse</h2>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:16px">in ${cat?.emoji || ''} ${esc(cat?.name || '')}</p>
+        <div class="modal-section">
+          <label class="label">Emoji</label>
+          <input class="input" id="veg-emoji" placeholder="🥕" maxlength="4" style="font-size:24px;text-align:center">
+        </div>
+        <div class="modal-section">
+          <label class="label">Name</label>
+          <input class="input" id="veg-name" placeholder="z.B. Cherry Tomaten, Kopfsalat…" autofocus>
+        </div>
+        <button class="btn btn-primary btn-full" id="veg-save">Hinzufügen</button>
+        <button class="btn btn-ghost btn-full" id="veg-cancel" style="margin-top:8px">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('veg-cancel').addEventListener('click', () => overlay.remove());
+    document.getElementById('veg-save').addEventListener('click', async () => {
+      const name  = document.getElementById('veg-name').value.trim();
+      const emoji = document.getElementById('veg-emoji').value.trim() || '🥬';
+      if (!name) { document.getElementById('veg-name').focus(); return; }
+      try {
+        const veg = await POST(`/api/gardens/${state.gardenId}/vegetables`, { name, emoji, category_id: catId });
+        state.vegetables.push(veg);
+        overlay.remove();
+        renderGarden();
+        toast('Gemüse hinzugefügt!');
+      } catch (err) { toast('Fehler: ' + err.message); }
+    });
+  }
+
+  async function showGalleryModal(veg) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:22px;margin-bottom:16px">
+          ${veg.emoji} ${esc(veg.name)} – Fotos
+        </h2>
+        <div id="gallery-content" style="text-align:center"><div class="spinner"></div></div>
+        <button class="btn btn-ghost btn-full" style="margin-top:16px" id="gal-close">Schließen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('gal-close').addEventListener('click', () => overlay.remove());
+
+    try {
+      const { harvests } = await GET(`/api/gardens/${state.gardenId}/vegetables/${veg.id}/harvests`);
+      const withPhotos = harvests.filter(h => h.photo_key);
+      const gc = document.getElementById('gallery-content');
+      if (!withPhotos.length) {
+        gc.innerHTML = '<p style="color:var(--muted);font-size:13px">Noch keine Fotos vorhanden.</p>';
+        return;
+      }
+      gc.innerHTML = `<div class="gallery-grid">${withPhotos.map(h => `
+        <div>
+          <img class="gallery-thumb"
+               src="/api/photos/${state.gardenId}/${h.id}"
+               alt="Ernte"
+               data-action="fullscreen-photo"
+               data-src="/api/photos/${state.gardenId}/${h.id}">
+          <div class="gallery-harvest-info">
+            ${h.count} Stück · ${h.user_name} · ${new Date(h.harvested_at * 1000).toLocaleDateString('de')}
+            ${h.note ? `<br><em>${esc(h.note)}</em>` : ''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+      gc.addEventListener('click', e => {
+        const btn = e.target.closest('[data-action="fullscreen-photo"]');
+        if (btn) openFullscreenPhoto(btn.dataset.src);
+      });
+    } catch (err) {
+      document.getElementById('gallery-content').innerHTML = '<p style="color:red">Fehler beim Laden.</p>';
+    }
+  }
+
+  function openFullscreenPhoto(src) {
+    const div = document.createElement('div');
+    div.className = 'photo-fullscreen';
+    div.innerHTML = `
+      <button class="photo-fullscreen-close">✕</button>
+      <img src="${esc(src)}" alt="Foto">`;
+    document.body.appendChild(div);
+    div.addEventListener('click', () => div.remove());
+  }
+
+  function showCreateGardenModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay modal-center open';
+    overlay.innerHTML = `
+      <div class="modal">
+        <div class="modal-handle"></div>
+        <h2 style="font-family:var(--font-display);font-size:26px;margin-bottom:8px">🌿 Neuer Garten</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:20px">Gib deinem Garten einen Namen und leg los.</p>
+        <div class="modal-section">
+          <label class="label">Gartenname</label>
+          <input class="input" id="cg-name" placeholder="Meiers Schrebergarten, Balkon 3. OG…" autofocus>
+        </div>
+        ${!state.username ? `
+        <div class="modal-section">
+          <label class="label">Dein Name</label>
+          <input class="input" id="cg-user" placeholder="Gartenzwerg, Tomaten-Jana…" maxlength="40">
+        </div>` : ''}
+        <button class="btn btn-primary btn-full" id="cg-create">Garten anlegen 🌱</button>
+        <button class="btn btn-ghost btn-full" id="cg-cancel" style="margin-top:8px">Abbrechen</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('cg-cancel').addEventListener('click', () => overlay.remove());
+    document.getElementById('cg-create').addEventListener('click', async () => {
+      const name = document.getElementById('cg-name').value.trim();
+      const userEl = document.getElementById('cg-user');
+      const user = userEl ? userEl.value.trim() : state.username;
+      if (!name) { document.getElementById('cg-name').focus(); return; }
+      if (!user) { if (userEl) userEl.focus(); return; }
+      if (!state.username) {
+        state.username = user;
+        localStorage.setItem('garten_username', user);
+      }
+      try {
+        const garden = await POST('/api/gardens', { name });
+        overlay.remove();
+        navigateToGarden(garden.id);
+      } catch (err) { toast('Fehler: ' + err.message); }
+    });
+  }
+
+  // ── Navigation ────────────────────────────────────────────────
+  function navigateToGarden(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('g', id);
+    window.history.pushState({}, '', url);
+    state.gardenId = id;
+    loadAndRenderGarden();
+  }
+
+  async function loadAndRenderGarden() {
+    document.getElementById('app').innerHTML =
+      '<div class="screen-loading"><div class="spinner"></div></div>';
+    try {
+      const data = await GET(`/api/gardens/${state.gardenId}`);
+      state.garden = data.garden;
+      state.categories = data.categories;
+      state.vegetables = data.vegetables;
+      state.lastWatering = data.lastWatering;
+      renderGarden();
+    } catch (err) {
+      document.getElementById('app').innerHTML = `
+        <div class="screen-home">
+          <div class="home-card" style="text-align:center">
+            <div style="font-size:48px;margin-bottom:12px">🥀</div>
+            <h2 style="font-family:var(--font-display);margin-bottom:8px">Garten nicht gefunden</h2>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Der Link ist ungültig oder der Garten wurde gelöscht.</p>
+            <button class="btn btn-primary" data-action="go-home">Zurück zur Startseite</button>
+          </div>
+        </div>`;
+      document.querySelector('[data-action="go-home"]')?.addEventListener('click', goHome);
+    }
+  }
+
+  function goHome() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('g');
+    window.history.pushState({}, '', url);
+    state.gardenId = null;
+    state.garden = null;
+    state.categories = [];
+    state.vegetables = [];
+    state.editMode = false;
+    renderHome();
+  }
+
+  // ── Event listeners ───────────────────────────────────────────
+  function attachHomeListeners() {
+    const app = document.getElementById('app');
+    app.addEventListener('click', e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      switch (btn.dataset.action) {
+        case 'open-create-garden': showCreateGardenModal(); break;
+        case 'join-garden': {
+          const input = document.getElementById('join-input');
+          let val = input.value.trim();
+          if (!val) { input.focus(); return; }
+          try {
+            const url = new URL(val);
+            val = url.searchParams.get('g') || val;
+          } catch (_) {}
+          navigateToGarden(val);
+          break;
+        }
+      }
+    });
+    document.getElementById('join-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.querySelector('[data-action="join-garden"]')?.click();
+    });
+  }
+
+  function attachGardenListeners() {
+    const root = document.getElementById('garden-root');
+    if (!root) return;
+
+    root.addEventListener('click', async e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+
+      switch (btn.dataset.action) {
+        case 'share': {
+          const url = window.location.href;
+          try {
+            await navigator.clipboard.writeText(url);
+            toast('🔗 Link kopiert!');
+          } catch (_) {
+            if (navigator.share) {
+              navigator.share({ title: state.garden.name, url });
+            } else {
+              prompt('Link zum Teilen:', url);
+            }
+          }
+          break;
+        }
+
+        case 'toggle-edit':
+          state.editMode = !state.editMode;
+          renderGarden();
+          break;
+
+        case 'enable-edit':
+          state.editMode = true;
+          renderGarden();
+          break;
+
+        case 'open-harvest': {
+          const vegId = btn.dataset.vegId;
+          const veg = state.vegetables.find(v => v.id === vegId);
+          if (!veg) return;
+          if (!state.username) {
+            showUsernameModal(() => showHarvestModal(veg));
+          } else {
+            showHarvestModal(veg);
+          }
+          break;
+        }
+
+        case 'open-gallery': {
+          const vegId = btn.dataset.vegId;
+          const veg = state.vegetables.find(v => v.id === vegId);
+          if (veg) showGalleryModal(veg);
+          break;
+        }
+
+        case 'open-add-cat':
+          showAddCategoryModal();
+          break;
+
+        case 'open-add-veg':
+          showAddVegModal(btn.dataset.catId);
+          break;
+
+        case 'delete-cat': {
+          const catId = btn.dataset.catId;
+          const cat = state.categories.find(c => c.id === catId);
+          if (!confirm(`Kategorie "${cat?.name}" und alle zugehörigen Gemüse löschen?`)) return;
+          await DEL(`/api/gardens/${state.gardenId}/categories/${catId}`);
+          state.categories = state.categories.filter(c => c.id !== catId);
+          state.vegetables = state.vegetables.filter(v => v.category_id !== catId);
+          renderGarden();
+          toast('Kategorie gelöscht.');
+          break;
+        }
+
+        case 'log-watering': {
+          const doLog = async () => {
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+              const watering = await POST(`/api/gardens/${state.gardenId}/waterings`, {
+                user_name: state.username,
+              });
+              state.lastWatering = watering;
+              // Update the card in place without full re-render
+              const card = document.getElementById('watering-card');
+              if (card) card.outerHTML = renderWateringCard(state.lastWatering);
+              celebrate(document.querySelector('.watering-status-icon') || btn);
+              toast('💧 Gegossen! Danke!');
+            } catch (err) {
+              toast('Fehler: ' + err.message);
+              btn.disabled = false;
+              btn.textContent = '💧 Gegossen!';
+            }
+          };
+          if (!state.username) {
+            showUsernameModal(doLog);
+          } else {
+            doLog();
+          }
+          break;
+        }
+
+        case 'delete-veg': {
+          const vegId = btn.dataset.vegId;
+          const veg = state.vegetables.find(v => v.id === vegId);
+          if (!confirm(`Gemüse "${veg?.name}" löschen? Alle Ernteeinträge gehen verloren.`)) return;
+          await DEL(`/api/gardens/${state.gardenId}/vegetables/${vegId}`);
+          state.vegetables = state.vegetables.filter(v => v.id !== vegId);
+          renderGarden();
+          toast('Gemüse gelöscht.');
+          break;
+        }
+      }
+    });
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+  async function init() {
+    const params = new URLSearchParams(window.location.search);
+    state.gardenId = params.get('g');
+
+    if (state.gardenId) {
+      await loadAndRenderGarden();
+    } else {
+      renderHome();
+    }
+  }
+
+  window.addEventListener('popstate', () => {
+    const params = new URLSearchParams(window.location.search);
+    state.gardenId = params.get('g');
+    if (state.gardenId) {
+      loadAndRenderGarden();
+    } else {
+      goHome();
+    }
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+
+  init();
+  </script>
+</body>
+</html>
