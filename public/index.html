@@ -906,6 +906,23 @@
   const POST = (p, b) => api('POST', p, b);
   const DEL  = (p)    => api('DELETE', p);
 
+  // ── Photo URLs ────────────────────────────────────────────────
+  // Originals live on the R2 public domain (offloads the Worker). Thumbnails
+  // use the Worker's webp transform. Once Cloudflare Transformations are
+  // enabled on the image domain, flip RESIZE_VIA_DOMAIN to serve thumbs via
+  // /cdn-cgi/image/ from the domain too.
+  const IMAGE_HOST = 'https://erbsenzaehler-images.jonas-strassel.de';
+  const RESIZE_VIA_DOMAIN = false;
+
+  function photoFullUrl(gardenId, harvestId) {
+    return `${IMAGE_HOST}/gardens/${gardenId}/${harvestId}`;
+  }
+  function photoThumbUrl(gardenId, harvestId, w) {
+    return RESIZE_VIA_DOMAIN
+      ? `${IMAGE_HOST}/cdn-cgi/image/width=${w},format=webp,quality=80/gardens/${gardenId}/${harvestId}`
+      : `/api/photos/${gardenId}/${harvestId}?w=${w}`;
+  }
+
   // ── Client-side image downscaling ─────────────────────────────
   // Phone photos are ~3 MB; shrink before upload to save R2 storage/egress.
   async function downscaleImage(file, maxDim = 1600, quality = 0.85) {
@@ -1435,11 +1452,11 @@
       gc.innerHTML = `<div class="gallery-grid">${withPhotos.map(h => `
         <div>
           <img class="gallery-thumb"
-               src="/api/photos/${state.gardenId}/${h.id}?w=500"
+               src="${photoThumbUrl(state.gardenId, h.id, 500)}"
                alt="Ernte"
                loading="lazy"
                data-action="fullscreen-photo"
-               data-src="/api/photos/${state.gardenId}/${h.id}?w=1600">
+               data-src="${photoFullUrl(state.gardenId, h.id)}">
           <div class="gallery-harvest-info">
             ${h.count} Stück · ${h.user_name} · ${new Date(h.harvested_at * 1000).toLocaleDateString('de')}
             ${h.note ? `<br><em>${esc(h.note)}</em>` : ''}
